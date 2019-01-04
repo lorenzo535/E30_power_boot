@@ -1,7 +1,7 @@
 
 #include <Servo.h>
 #include <Streaming.h>
-
+#include "Switch.h"
 
 Servo myservo;  // create servo object to control a servo
 
@@ -20,6 +20,8 @@ Servo myservo;  // create servo object to control a servo
 
 #define LOCK_BUTTON   PIN_INPUT_1
 #define LOCK_BUTTON_REMOTE  PIN_INPUT_2
+
+Switch InputButton= Switch (LOCK_BUTTON, INPUT,HIGH,200,300,250,80);
 
 #define PIN_USER_BUTTON  A0
 #define PIN_LED_ERR   4
@@ -55,7 +57,6 @@ Servo myservo;  // create servo object to control a servo
 
 unsigned short mode, old_mode;
 unsigned short state,old_state;
-
 unsigned int pos = 0;    // variable to store the servo position
 unsigned int current_pos;
 boolean show_current_measure;
@@ -65,6 +66,7 @@ boolean show_mode;
 boolean off_servo;
 boolean old_sw1, old_sw2;
 boolean old_lock_cmd_button, old_lock_cmd_remote;
+boolean inhibit_first;
 
 #define ANALOG_AVERAGING_STEPS  10
 float raw_current[ANALOG_AVERAGING_STEPS];
@@ -73,6 +75,7 @@ float raw_position[ANALOG_AVERAGING_STEPS];
 short unsigned int current_av_steps, position_av_steps;
 #define CURRENT_LIMIT 2.6
 #define MV_PER_AMP 100
+
 
 
 void setup() {
@@ -116,16 +119,27 @@ void setup() {
   EvaluateState();
   OutMotor (MOTOR_UNLOCKER,0);
   OutMotor (MOTOR_CAM,0);
+
+  InputButton.poll();
+  inhibit_first = 1;
+  
 }
 
-void loop() {
+void StopServo()
+{
+  pos = ScalePosition();
+  myservo.write(pos);
+}
 
+
+
+void loop() {
+  InputButton.poll();
 
  //TestServo();
  
   if (show_mode)
    Serial << "Current mode " << mode << " \n";
- 
  
   //delay (50);
   ReadKeyboardCmds();
@@ -144,7 +158,7 @@ void loop() {
   
      case MODE_CLOSING :  ProcessClosing();  break;
 
-     case MODE_IDLE :  StopServo(); OutMotor(MOTOR_CAM, 0); OutMotor(MOTOR_UNLOCKER, 0); myservo.detach();
+     case MODE_IDLE :  StopServo(); OutMotor(MOTOR_CAM, 0); OutMotor(MOTOR_UNLOCKER, 0); myservo.detach(); break;
      default: 
       StopServo();
   }
@@ -157,16 +171,33 @@ void ProcessOpening()
 {
    switch (state)
    {
-       case STATE_BOOT_LOCKED : UnlockCam(); Serial << "process op boot locked \n";break;
+       case STATE_BOOT_LOCKED : UnlockCam(); /*Serial << "process op boot locked \n";*/ break;
 
        case STATE_ENGAGED  : 
 
-       case STATE_SWINGING :  OutMotor(MOTOR_CAM,0); SetServo(SERVO_POSITION_TOP_END); Serial << "process op swinging\n"; break;
+       case STATE_SWINGING :  OutMotor(MOTOR_CAM,0); SetServo(SERVO_POSITION_TOP_END);/* Serial << "process op swinging\n";*/ break;
 
        case STATE_AT_TOP_END : StopServo(); /*Serial << "top end\n";*/ mode = MODE_IDLE; break;
 
    }
 }
+
+
+void ProcessClosing ()
+{
+    switch (state)
+    {
+
+    case STATE_AT_TOP_END :
+    case STATE_SWINGING :  SetServo(SERVO_POSITION_ENGAGEMENT); /*Serial << "process cl top end , swinging\n";*/  break;
+
+    case STATE_ENGAGED  : /*StopServo()*/; LockCam(); /*erial << "process closing state engaged \n"; */ break;
+
+    case STATE_BOOT_LOCKED : OutMotor(MOTOR_CAM,0); /*Serial << "process cl boot mocked\n";*/mode = MODE_IDLE; break;
+    }
+
+}
+
 
 
 void UnlockCam()
@@ -188,20 +219,7 @@ void LockCam()
 
 
 
-void ProcessClosing ()
-{
-    switch (state)
-    {
 
-    case STATE_AT_TOP_END :
-    case STATE_SWINGING :  SetServo(SERVO_POSITION_ENGAGEMENT); Serial << "process cl top end , swinging\n"; break;
-
-    case STATE_ENGAGED  : /*StopServo()*/; LockCam(); Serial << "process closing state engaged \n"; break;
-
-    case STATE_BOOT_LOCKED : OutMotor(MOTOR_CAM,0); /*Serial << "process cl boot mocked\n";*/mode = MODE_IDLE; break;
-    }
-
-}
 
 
 void send_unlock_motor()
@@ -256,16 +274,24 @@ void OutMotor (int _motor_ID, float _command)
 
 void ReadUserCommands()
 {
+  
     if (isCarMoving())
         return;
-
+ 
     boolean lock_cmd_button, lock_cmd_remote;
 
     lock_cmd_button = digitalRead(LOCK_BUTTON);
     lock_cmd_remote = digitalRead(LOCK_BUTTON_REMOTE);
 
-    if ((old_lock_cmd_button != lock_cmd_button) && (lock_cmd_button))
+ 
+    if (InputButton.released())
     {
+      if (inhibit_first)
+      {
+          inhibit_first = 0;
+          return;
+      }      
+      
         if (isCarLocked())
             if (state == STATE_BOOT_LOCKED)
                 mode = MODE_IDLE;
@@ -285,7 +311,7 @@ void ReadUserCommands()
         }
     } // if lock_cmd_button
 
-    if ((old_lock_cmd_remote != lock_cmd_remote) && (lock_cmd_remote))
+    if (0)//(old_lock_cmd_remote != lock_cmd_remote) && (lock_cmd_remote))
     {
         if (mode != MODE_IDLE)
         {
@@ -302,7 +328,20 @@ void ReadUserCommands()
     }
 
     if (old_mode != mode)
-     Serial << "New mode is " << mode << "\n";
+    {
+     Serial << "New mode is " ;
+     switch (mode)
+     {
+      case MODE_IDLE : Serial << " IDLE \n"; break;
+      case MODE_OPENING : Serial << " MODE_OPENING \n"; break;
+      case MODE_CLOSING : Serial << " MODE_CLOSING \n"; break;
+      case MODE_SAFETY_CLOSING : Serial << " MODE_SAFETY_CLOSING \n"; break;
+     }
+     }
+      
+      
+      
+      
 
     old_mode = mode;
 }
@@ -394,18 +433,13 @@ void EvaluateState()
  old_sw2 = sw2;
 
  if (old_state != state)
-  Serial << "New state is " << state <<"\n";
+  Serial << "  ==== New state is " << state <<"\n";
 
  old_state = state;
    
 }
 
 
-void StopServo()
-{
-  pos = ScalePosition();
-  myservo.write(pos);
-}
 
 unsigned int ScalePosition ()
 {
