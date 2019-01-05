@@ -1,3 +1,4 @@
+// BOARD TYPE : ARDUINO PRO MICRO
 
 #include <Servo.h>
 #include <Streaming.h>
@@ -22,6 +23,8 @@ Servo myservo;  // create servo object to control a servo
 #define LOCK_BUTTON_REMOTE  PIN_INPUT_2
 
 Switch InputButton= Switch (LOCK_BUTTON, INPUT,HIGH,200,300,250,80);
+Switch InputRemoteButton= Switch (LOCK_BUTTON_REMOTE, INPUT,HIGH,200,300,250,80);
+
 
 #define PIN_USER_BUTTON  A0
 #define PIN_LED_ERR   4
@@ -67,13 +70,13 @@ boolean off_servo;
 boolean old_sw1, old_sw2;
 boolean old_lock_cmd_button, old_lock_cmd_remote;
 boolean inhibit_first;
-
+boolean servo_stopped;
 #define ANALOG_AVERAGING_STEPS  10
 float raw_current[ANALOG_AVERAGING_STEPS];
 float raw_position[ANALOG_AVERAGING_STEPS];
-
+unsigned long motion_started;
 short unsigned int current_av_steps, position_av_steps;
-#define CURRENT_LIMIT 2.6
+#define CURRENT_LIMIT 3.6
 #define MV_PER_AMP 100
 
 
@@ -121,12 +124,17 @@ void setup() {
   OutMotor (MOTOR_CAM,0);
 
   InputButton.poll();
+  InputRemoteButton.poll();
   inhibit_first = 1;
+  servo_stopped = true;  
   
 }
 
 void StopServo()
 {
+  if (servo_stopped)
+  return;
+  servo_stopped = true;
   pos = ScalePosition();
   myservo.write(pos);
 }
@@ -135,6 +143,7 @@ void StopServo()
 
 void loop() {
   InputButton.poll();
+  InputRemoteButton.poll();
 
  //TestServo();
  
@@ -191,7 +200,7 @@ void ProcessClosing ()
     case STATE_AT_TOP_END :
     case STATE_SWINGING :  SetServo(SERVO_POSITION_ENGAGEMENT); /*Serial << "process cl top end , swinging\n";*/  break;
 
-    case STATE_ENGAGED  : /*StopServo()*/; LockCam(); /*erial << "process closing state engaged \n"; */ break;
+    case STATE_ENGAGED  : StopServo(); LockCam(); /*erial << "process closing state engaged \n"; */ break;
 
     case STATE_BOOT_LOCKED : OutMotor(MOTOR_CAM,0); /*Serial << "process cl boot mocked\n";*/mode = MODE_IDLE; break;
     }
@@ -206,14 +215,14 @@ void UnlockCam()
   delay (500); 
   OutMotor(MOTOR_UNLOCKER,0); 
   OutMotor(MOTOR_CAM, CAM_COMMAND_UNLOCK); 
-  delay (1000); 
+  delay (1500);
   OutMotor(MOTOR_CAM,0);
 }
 
 void LockCam()
 {
   OutMotor(MOTOR_CAM, CAM_COMMAND_GO_TO_LOCK); 
-  delay (1000); 
+  //delay (1000);
  // OutMotor(MOTOR_CAM,0);
 }
 
@@ -311,8 +320,9 @@ void ReadUserCommands()
         }
     } // if lock_cmd_button
 
-    if (0)//(old_lock_cmd_remote != lock_cmd_remote) && (lock_cmd_remote))
+    if (InputRemoteButton.released())
     {
+      Serial << "    $$$$$$  REMOTE \n";
         if (mode != MODE_IDLE)
         {
             mode = MODE_IDLE;            
@@ -320,7 +330,7 @@ void ReadUserCommands()
         else
         {
 
-         if (state == STATE_BOOT_LOCKED)
+         if (state == STATE_AT_TOP_END)
              mode = MODE_CLOSING;
          else
              mode = MODE_OPENING;
@@ -333,11 +343,11 @@ void ReadUserCommands()
      switch (mode)
      {
       case MODE_IDLE : Serial << " IDLE \n"; break;
-      case MODE_OPENING : Serial << " MODE_OPENING \n"; break;
-      case MODE_CLOSING : Serial << " MODE_CLOSING \n"; break;
+      case MODE_OPENING : Serial << " MODE_OPENING \n"; motion_started = millis(); break;
+      case MODE_CLOSING : Serial << " MODE_CLOSING \n"; motion_started = millis(); break;
       case MODE_SAFETY_CLOSING : Serial << " MODE_SAFETY_CLOSING \n"; break;
      }
-     }
+    }
       
       
       
@@ -390,6 +400,7 @@ void SetServo(int position_target)
     if (!myservo.attached())
         myservo.attach(PIN_PWM_SERVO);
     myservo.write(position_target);
+    servo_stopped = false;
 }
 
 void EvaluateState()
@@ -562,14 +573,21 @@ void CurrentProtection()
    skip = skip+1;
  }
 
-    if (0)//(fabs(average) >= current_limit)&&(state ==STATE_SWINGING))
+  
+unsigned long deltat;
+    if ((fabs(average) >= current_limit)&&(state ==STATE_SWINGING) && (current_pos <= 130) )
     {
+          deltat = millis() - motion_started;
+          //Inhibit first two seconds after servo has started moving
+          if (deltat >= 2000)
+          {
             Serial << "##### current limit reached " << fabs(average) << " (A) \n";
             StopServo();
             if (mode== MODE_CLOSING)
             mode = MODE_SAFETY_CLOSING;
             else 
             mode == MODE_IDLE;
+          }
     }
     
   
