@@ -42,6 +42,7 @@ Switch InputRemoteButton= Switch (LOCK_BUTTON_REMOTE, INPUT,LOW,200,300,250,10);
 #define MODE_CLOSING 1
 #define MODE_IDLE 2
 #define MODE_SAFETY_CLOSING 3
+#define MODE_MANUAL_STOP 4
 
 #define STATE_BOOT_LOCKED 0
 #define STATE_ENGAGED 1
@@ -62,7 +63,7 @@ Switch InputRemoteButton= Switch (LOCK_BUTTON_REMOTE, INPUT,LOW,200,300,250,10);
 #define MOTOR_CAM 1
 #define MOTOR_UNLOCKER 2
 
-unsigned short mode, old_mode;
+unsigned short mode, old_mode, mode_when_stopped_was;
 unsigned short state,old_state;
 unsigned int pos = 0;    // variable to store the servo position
 unsigned int current_pos;
@@ -129,7 +130,8 @@ void setup() {
   InputRemoteButton.poll();
   inhibit_first = 1;
   servo_stopped = true;  
-    
+  mode_when_stopped_was = MODE_IDLE;
+
 }
 
 void StopServo()
@@ -168,6 +170,8 @@ void loop() {
      case MODE_OPENING :  PowerDrivesOn(); ProcessOpening(); break;
   
      case MODE_CLOSING :  PowerDrivesOn(); ProcessClosing();  break;
+
+     case MODE_MANUAL_STOP : StopServo(); break;
 
      case MODE_IDLE :  StopServo(); OutMotor(MOTOR_CAM, 0); OutMotor(MOTOR_UNLOCKER, 0); myservo.detach(); PowerDrivesOff(); break;
      default: 
@@ -326,13 +330,29 @@ return;
         else
         {
             // button pressed, car is unlocked, several cases:
-            if (mode != MODE_IDLE)
-                mode = MODE_IDLE;
-            else if (state == STATE_AT_TOP_END)
-                mode = MODE_CLOSING;
-             else
-                // in all other case, a pressed button is associated to open
-                    mode = MODE_OPENING;
+            if (mode == MODE_MANUAL_STOP)
+            {
+             if (mode_when_stopped_was == MODE_CLOSING)
+              mode = MODE_OPENING;
+             else if (mode_when_stopped_was == MODE_OPENING) 
+               mode = MODE_CLOSING;
+             else 
+             mode = MODE_IDLE;
+            }
+              else
+              {
+            
+                if (mode != MODE_IDLE)
+                {   
+                    mode_when_stopped_was = mode;
+                    mode = MODE_MANUAL_STOP;
+                }
+                else if (state == STATE_AT_TOP_END)
+                    mode = MODE_CLOSING;
+                 else
+                    // in all other case, a pressed button is associated to open
+                        mode = MODE_OPENING;
+              }
 
         }
     } // if lock_cmd_button
@@ -342,7 +362,7 @@ return;
       Serial << "    $$$$$$  REMOTE \n";
         if (mode != MODE_IDLE)
         {
-            mode = MODE_IDLE;            
+            mode = MODE_MANUAL_STOP;            
         }
         else
         {
@@ -362,6 +382,7 @@ return;
       case MODE_OPENING : Serial << " MODE_OPENING \n"; motion_started = millis(); break;
       case MODE_CLOSING : Serial << " MODE_CLOSING \n"; motion_started = millis(); break;
       case MODE_SAFETY_CLOSING : Serial << " MODE_SAFETY_CLOSING \n"; break;
+      case MODE_MANUAL_STOP: Serial << " MODE_MANUAL_STOP\n"; break;
      }
     }
       
@@ -421,6 +442,7 @@ void SetServo(int position_target)
 
 void EvaluateState()
 {
+  static unsigned short count_debounce = 0;
   //Read Servo feedback 
   current_pos = ScalePosition();
   if (show_position)
@@ -452,8 +474,17 @@ void EvaluateState()
  if (!sw1 && !sw2)
   state = STATE_SWINGING;
 
- if (abs (current_pos - SERVO_POSITION_TOP_END) <  POSITION_TOLERANCE)
- state = STATE_AT_TOP_END;
+ if (abs (current_pos - SERVO_POSITION_TOP_END) <=  POSITION_TOLERANCE)
+ {
+  count_debounce ++;
+ }
+ else count_debounce = 0;
+
+ if (count_debounce >= 10)
+ {
+  state = STATE_AT_TOP_END;
+  count_debounce = 11; // bound counter
+ }
    
   
  old_sw1 = sw1;
@@ -598,18 +629,18 @@ void CurrentProtection()
 
    float current_limit = CURRENT_LIMIT;  
    
- if (show_current_measure)
- {
-   if (skip >= 3)
+   if (show_current_measure)
    {
-       Serial << " current measure " << fabs(average) << " (A)  LIMIT : " << current_limit << "\n";
-       skip = 0;
+     if (skip >= 3)
+     {
+         Serial << " current measure " << fabs(average) << " (A)  LIMIT : " << current_limit << "\n";
+         skip = 0;
+     }
+     skip = skip+1;
    }
-   skip = skip+1;
- }
-
   
-unsigned long deltat;
+    
+    unsigned long deltat;
     if ((fabs(average) >= current_limit)&&(state ==STATE_SWINGING) )//&& (current_pos <= 130) )
     {
           deltat = millis() - motion_started;
