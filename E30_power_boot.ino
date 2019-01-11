@@ -1,4 +1,4 @@
-// BOARD TYPE : ARDUINO PRO MICRO
+// BOARD TYPE : ARDUINO PRO MICRO (programmer choose arduino Leonardo)
 
 #include <Servo.h>
 #include <Streaming.h>
@@ -18,15 +18,17 @@ Servo myservo;  // create servo object to control a servo
 #define PIN_INPUT_2  8
 #define PIN_INPUT_3  7 
 #define PIN_INPUT_4  A1
+#define POWER_DRIVES A0
 
 #define LOCK_BUTTON   PIN_INPUT_1
 #define LOCK_BUTTON_REMOTE  PIN_INPUT_2
 
-Switch InputButton= Switch (LOCK_BUTTON, INPUT,HIGH,200,300,250,80);
-Switch InputRemoteButton= Switch (LOCK_BUTTON_REMOTE, INPUT,HIGH,200,300,250,80);
+// For Switch to work as intended, object must be defined as LOW polarity
+// and event released() must be used to detect button pressed. Released goes to 1
+// as soon as the button is pressed
+Switch InputButton= Switch (LOCK_BUTTON, INPUT,LOW,200,300,250,10); 
+Switch InputRemoteButton= Switch (LOCK_BUTTON_REMOTE, INPUT,LOW,200,300,250,10);
 
-
-#define PIN_USER_BUTTON  A0
 #define PIN_LED_ERR   4
 #define PIN_LED_BTNS A3
 
@@ -53,8 +55,10 @@ Switch InputRemoteButton= Switch (LOCK_BUTTON_REMOTE, INPUT,HIGH,200,300,250,80)
 
 #define CAM_COMMAND_GO_TO_LOCK -1
 #define CAM_COMMAND_UNLOCK 1
-
-
+#define CURRENT_LIMIT 3.0
+#define MV_PER_AMP 100
+#define POS_FEEDBACK_LOW_BOUND 40
+#define POS_FEEDBACK_HIGH_BOUND 1022
 #define MOTOR_CAM 1
 #define MOTOR_UNLOCKER 2
 
@@ -76,8 +80,6 @@ float raw_current[ANALOG_AVERAGING_STEPS];
 float raw_position[ANALOG_AVERAGING_STEPS];
 unsigned long motion_started;
 short unsigned int current_av_steps, position_av_steps;
-#define CURRENT_LIMIT 3.6
-#define MV_PER_AMP 100
 
 
 
@@ -95,13 +97,13 @@ void setup() {
   pinMode(PIN_INPUT_3,INPUT);
   pinMode(PIN_INPUT_4,INPUT);
   
-  pinMode(PIN_USER_BUTTON,INPUT);
   pinMode(PIN_LED_ERR,OUTPUT);
   pinMode(PIN_LED_BTNS,OUTPUT);
   
   pinMode(PIN_DIR_MOTOR_CAM,OUTPUT);
   pinMode(PIN_PWM_MOTOR_CAM,OUTPUT);
   pinMode(PIN_PWM_MOTOR_UNLOCKER,OUTPUT);
+  pinMode(POWER_DRIVES,OUTPUT);
 
   StopServo();
   old_sw1 = 0;
@@ -127,7 +129,7 @@ void setup() {
   InputRemoteButton.poll();
   inhibit_first = 1;
   servo_stopped = true;  
-  
+    
 }
 
 void StopServo()
@@ -163,11 +165,11 @@ void loop() {
   switch (mode)
   {
   
-     case MODE_OPENING :  ProcessOpening(); break;
+     case MODE_OPENING :  PowerDrivesOn(); ProcessOpening(); break;
   
-     case MODE_CLOSING :  ProcessClosing();  break;
+     case MODE_CLOSING :  PowerDrivesOn(); ProcessClosing();  break;
 
-     case MODE_IDLE :  StopServo(); OutMotor(MOTOR_CAM, 0); OutMotor(MOTOR_UNLOCKER, 0); myservo.detach(); break;
+     case MODE_IDLE :  StopServo(); OutMotor(MOTOR_CAM, 0); OutMotor(MOTOR_UNLOCKER, 0); myservo.detach(); PowerDrivesOff(); break;
      default: 
       StopServo();
   }
@@ -176,6 +178,15 @@ void loop() {
   
 }
 
+void PowerDrivesOn()
+{
+  digitalWrite(POWER_DRIVES,HIGH);
+}
+
+void PowerDrivesOff()
+{
+  digitalWrite(POWER_DRIVES,LOW);
+}
 void ProcessOpening()
 {
    switch (state)
@@ -283,16 +294,22 @@ void OutMotor (int _motor_ID, float _command)
 
 void ReadUserCommands()
 {
+/*
+//Serial << "pushed " << InputButton.pushed()  ;
+//Serial << "   switched " << InputButton.switched() ;
+//Serial << "   on " << InputButton.on() ;
+if (InputButton.released())
+Serial << "   released " << "\n";
+
+if (InputButton.pushed())
+Serial << "   pushed " << "\n";
+return;
+*/
+
   
     if (isCarMoving())
         return;
- 
-    boolean lock_cmd_button, lock_cmd_remote;
-
-    lock_cmd_button = digitalRead(LOCK_BUTTON);
-    lock_cmd_remote = digitalRead(LOCK_BUTTON_REMOTE);
-
- 
+    
     if (InputButton.released())
     {
       if (inhibit_first)
@@ -329,7 +346,6 @@ void ReadUserCommands()
         }
         else
         {
-
          if (state == STATE_AT_TOP_END)
              mode = MODE_CLOSING;
          else
@@ -444,7 +460,18 @@ void EvaluateState()
  old_sw2 = sw2;
 
  if (old_state != state)
-  Serial << "  ==== New state is " << state <<"\n";
+ {
+  Serial << "  ==== New state is " ;
+  switch (state)
+     {
+      case STATE_BOOT_LOCKED : Serial << " STATE_BOOT_LOCKED \n"; break;
+      case STATE_ENGAGED : Serial << " STATE_ENGAGED \n"; break;
+      case STATE_SWINGING : Serial << " STATE_SWINGING \n";  break;
+      case STATE_AT_TOP_END : Serial << " STATE_AT_TOP_END \n"; break;
+     }
+     
+ }
+
 
  old_state = state;
    
@@ -454,18 +481,24 @@ void EvaluateState()
 
 unsigned int ScalePosition ()
 {
-  //.. 0/3 = top = 180°
-  //1010/1024 = bottom = 0°
+  //raw reading 1022 = top = 180°
+  // raw reading 980 = bottom = 0°
   static int pos_average_steps = 0;
   int j = 0;
+  bool displayout = false;
 
-  float scaledpos = 1024 - analogRead (PIN_SERVO_FEEDBACK);
+//1024 - anain
+
+  float scaledpos = 1024- analogRead (PIN_SERVO_FEEDBACK);
 
   raw_position [pos_average_steps] = scaledpos;
   pos_average_steps++;
 
    if (pos_average_steps >= ANALOG_AVERAGING_STEPS)
+   {
         pos_average_steps = 0;
+        displayout = true;
+   }
 
   //compute average
   float average = 0;
@@ -474,9 +507,11 @@ unsigned int ScalePosition ()
   average = average + raw_position [j];
   }
   average = average / ANALOG_AVERAGING_STEPS;
- 
-  
-  return (unsigned int) (average / 1024. * 180.);
+
+  unsigned int output;
+  output = (unsigned int) (average *0.183673 - 7.7142857); // line between points (42,0) and (1022, 180)
+  //if (displayout) Serial <<" Ana reading " << scaledpos <<"average "<<  average << "  pos corresponds to " <<output<< "\n";
+  return output;
 
   
 }
@@ -575,7 +610,7 @@ void CurrentProtection()
 
   
 unsigned long deltat;
-    if ((fabs(average) >= current_limit)&&(state ==STATE_SWINGING) && (current_pos <= 130) )
+    if ((fabs(average) >= current_limit)&&(state ==STATE_SWINGING) )//&& (current_pos <= 130) )
     {
           deltat = millis() - motion_started;
           //Inhibit first two seconds after servo has started moving
