@@ -52,11 +52,15 @@ Switch InputRemoteButton= Switch (LOCK_BUTTON_REMOTE, INPUT,LOW,200,300,250,10);
 
 #define SERVO_POSITION_ENGAGEMENT 180
 #define SERVO_POSITION_TOP_END 0
-#define POSITION_TOLERANCE 6
+#define SERVO_POSITION_UNLOCK 165
+#define POSITION_TOLERANCE 10
 
 #define CAM_COMMAND_GO_TO_LOCK -1
 #define CAM_COMMAND_UNLOCK 1
-#define CURRENT_LIMIT 3.0
+#define CURRENT_LIMIT 3.6
+  
+  #define CURRENT_EXTRA_ALLOWANCE_LOCK 1
+#define OVERCURRENT_CONSECUTIVE_STEPS 5
 #define MV_PER_AMP 100
 #define POS_FEEDBACK_LOW_BOUND 40
 #define POS_FEEDBACK_HIGH_BOUND 1022
@@ -67,11 +71,13 @@ unsigned short mode, old_mode, mode_when_stopped_was;
 unsigned short state,old_state;
 unsigned int pos = 0;    // variable to store the servo position
 unsigned int current_pos;
+unsigned short overcurrent_cnt = 0;
 boolean show_current_measure;
 boolean show_position;
 boolean show_switches;
 boolean show_mode;
 boolean off_servo;
+boolean power;
 boolean old_sw1, old_sw2;
 boolean old_lock_cmd_button, old_lock_cmd_remote;
 boolean inhibit_first;
@@ -146,6 +152,7 @@ void StopServo()
 
 
 void loop() {
+
   InputButton.poll();
   InputRemoteButton.poll();
 
@@ -156,13 +163,12 @@ void loop() {
  
   //delay (50);
   ReadKeyboardCmds();
- // return;
-
+ 
+ //return;
   
   EvaluateState();
 
   ReadUserCommands();
-
 
   switch (mode)
   {
@@ -172,6 +178,7 @@ void loop() {
      case MODE_CLOSING :  PowerDrivesOn(); ProcessClosing();  break;
 
      case MODE_MANUAL_STOP : StopServo(); break;
+     case MODE_SAFETY_CLOSING : mode = MODE_IDLE; break;
 
      case MODE_IDLE :  StopServo(); OutMotor(MOTOR_CAM, 0); OutMotor(MOTOR_UNLOCKER, 0); myservo.detach(); PowerDrivesOff(); break;
      default: 
@@ -185,6 +192,7 @@ void loop() {
 void PowerDrivesOn()
 {
   digitalWrite(POWER_DRIVES,HIGH);
+  delay(200);
 }
 
 void PowerDrivesOff()
@@ -215,7 +223,7 @@ void ProcessClosing ()
     case STATE_AT_TOP_END :
     case STATE_SWINGING :  SetServo(SERVO_POSITION_ENGAGEMENT); /*Serial << "process cl top end , swinging\n";*/  break;
 
-    case STATE_ENGAGED  : StopServo(); LockCam(); /*erial << "process closing state engaged \n"; */ break;
+    case STATE_ENGAGED  : LockCam(); StopServo();  /*erial << "process closing state engaged \n"; */ break;
 
     case STATE_BOOT_LOCKED : OutMotor(MOTOR_CAM,0); /*Serial << "process cl boot mocked\n";*/mode = MODE_IDLE; break;
     }
@@ -226,6 +234,7 @@ void ProcessClosing ()
 
 void UnlockCam()
 {
+  myservo.write(SERVO_POSITION_UNLOCK);
   OutMotor(MOTOR_UNLOCKER,1); 
   delay (500); 
   OutMotor(MOTOR_UNLOCKER,0); 
@@ -237,7 +246,7 @@ void UnlockCam()
 void LockCam()
 {
   OutMotor(MOTOR_CAM, CAM_COMMAND_GO_TO_LOCK); 
-  //delay (1000);
+  delay (1000);
  // OutMotor(MOTOR_CAM,0);
 }
 
@@ -345,7 +354,7 @@ return;
                 if (mode != MODE_IDLE)
                 {   
                     mode_when_stopped_was = mode;
-                    mode = MODE_MANUAL_STOP;
+                    mode = MODE_MANUAL_STOP;                   
                 }
                 else if (state == STATE_AT_TOP_END)
                     mode = MODE_CLOSING;
@@ -412,6 +421,13 @@ boolean isCarMoving()
 
 void TestServo()
 {
+
+   if (power)
+  PowerDrivesOn();
+  else
+  PowerDrivesOff();
+  return;
+
 
   if (pos <= 0) 
   pos = 0;
@@ -590,6 +606,9 @@ void ReadKeyboardCmds()
        case '1' : mode = MODE_CLOSING; Serial << "closing keyboard command \n";break;
        case '2' : mode = MODE_OPENING; Serial << "opening keyboard command \n";break;
        case '3' : show_switches = !show_switches;break;
+       case  'n':
+       case 'N':
+                Serial << "power " << (power ? "ON" : "OFF") << "\n"; power =!power; break;
        
        case 'X':
        case 'x' : off_servo = !off_servo;  
@@ -628,6 +647,10 @@ void CurrentProtection()
     average = average / ANALOG_AVERAGING_STEPS;
 
    float current_limit = CURRENT_LIMIT;  
+   if (pos >= 150)
+   {   
+   current_limit += CURRENT_EXTRA_ALLOWANCE_LOCK;
+   }
    
    if (show_current_measure)
    {
@@ -641,20 +664,28 @@ void CurrentProtection()
   
     
     unsigned long deltat;
-    if ((fabs(average) >= current_limit)&&(state ==STATE_SWINGING) )//&& (current_pos <= 130) )
+    if ((fabs(average) >= current_limit)&&(state ==STATE_SWINGING) )
     {
-          deltat = millis() - motion_started;
-          //Inhibit first two seconds after servo has started moving
-          if (deltat >= 2000)
+          overcurrent_cnt++;
+
+          if (overcurrent_cnt >= OVERCURRENT_CONSECUTIVE_STEPS)
           {
-            Serial << "##### current limit reached " << fabs(average) << " (A) \n";
-            StopServo();
-            if (mode== MODE_CLOSING)
-            mode = MODE_SAFETY_CLOSING;
-            else 
-            mode == MODE_IDLE;
+          
+            deltat = millis() - motion_started;
+            //Inhibit first two seconds after servo has started moving
+            if (deltat >= 2000)
+            {
+              Serial << "##### current limit reached " << fabs(average) << " (A) \n";
+              StopServo();
+              if (mode== MODE_CLOSING)
+              mode = MODE_SAFETY_CLOSING;
+              else 
+              mode == MODE_IDLE;
+            }
           }
     }
+    else 
+      overcurrent_cnt = 0;
     
   
 }
