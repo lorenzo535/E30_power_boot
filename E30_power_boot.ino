@@ -50,27 +50,28 @@ Switch InputRemoteButton= Switch (LOCK_BUTTON_REMOTE, INPUT,LOW,200,300,250,10);
 #define STATE_AT_TOP_END 3
 //////////////////////////////////////
 
-#define SERVO_POSITION_ENGAGEMENT 180
-#define SERVO_POSITION_TOP_END 0
+#define SERVO_POSITION_ENGAGEMENT 2000
+#define SERVO_POSITION_ENGAGEMENT_INCREASE_CURRENT 1900
+#define SERVO_POSITION_TOP_END 1000
 #define SERVO_POSITION_UNLOCK 165
 #define POSITION_TOLERANCE 10
 
 #define CAM_COMMAND_GO_TO_LOCK -1
 #define CAM_COMMAND_UNLOCK 1
-#define CURRENT_LIMIT 3.6
+#define CURRENT_LIMIT 1.1
   
   #define CURRENT_EXTRA_ALLOWANCE_LOCK 1
 #define OVERCURRENT_CONSECUTIVE_STEPS 5
 #define MV_PER_AMP 100
-#define POS_FEEDBACK_LOW_BOUND 40
-#define POS_FEEDBACK_HIGH_BOUND 1022
+#define POS_FEEDBACK_LOW_BOUND 1000
+#define POS_FEEDBACK_HIGH_BOUND 2000
 #define MOTOR_CAM 1
 #define MOTOR_UNLOCKER 2
 
 unsigned short mode, old_mode, mode_when_stopped_was;
 unsigned short state,old_state;
-unsigned int pos = 0;    // variable to store the servo position
-unsigned int current_pos;
+int pos = 0;    // variable to store the servo position
+int current_pos;
 unsigned short overcurrent_cnt = 0;
 boolean show_current_measure;
 boolean show_position;
@@ -78,6 +79,7 @@ boolean show_switches;
 boolean show_mode;
 boolean off_servo;
 boolean power;
+boolean drivers_on;
 boolean old_sw1, old_sw2;
 boolean old_lock_cmd_button, old_lock_cmd_remote;
 boolean inhibit_first;
@@ -91,8 +93,7 @@ short unsigned int current_av_steps, position_av_steps;
 
 
 void setup() {
-  myservo.attach(PIN_PWM_SERVO);  // attaches the servo on pin 9 to the servo object
-  
+    
   pinMode(PIN_LOCK_SW1,INPUT);
   pinMode(PIN_LOCK_SW2,INPUT);
   
@@ -119,7 +120,7 @@ void setup() {
   old_mode = -1;
   mode = MODE_IDLE;
   show_switches = 0;
-
+  show_position = 0;
   
   int j;
   for (j = 0; j < ANALOG_AVERAGING_STEPS; j++)
@@ -137,6 +138,8 @@ void setup() {
   inhibit_first = 1;
   servo_stopped = true;  
   mode_when_stopped_was = MODE_IDLE;
+  drivers_on = true;
+  PowerDrivesOff();
 
 }
 
@@ -144,9 +147,18 @@ void StopServo()
 {
   if (servo_stopped)
   return;
+  int i;
   servo_stopped = true;
   pos = ScalePosition();
-  myservo.write(pos);
+
+  for (i = 0; i < 3; i++)
+  {
+  myservo.writeMicroseconds(pos);
+  delay (100);
+  }
+    
+  mode = MODE_IDLE;
+  
 }
 
 
@@ -191,13 +203,19 @@ void loop() {
 
 void PowerDrivesOn()
 {
+  if (drivers_on)
+  return;
   digitalWrite(POWER_DRIVES,HIGH);
   delay(200);
+  drivers_on = true;
 }
 
 void PowerDrivesOff()
 {
+  if (!drivers_on)
+  return;
   digitalWrite(POWER_DRIVES,LOW);
+  drivers_on = false;
 }
 void ProcessOpening()
 {
@@ -209,7 +227,7 @@ void ProcessOpening()
 
        case STATE_SWINGING :  OutMotor(MOTOR_CAM,0); SetServo(SERVO_POSITION_TOP_END);/* Serial << "process op swinging\n";*/ break;
 
-       case STATE_AT_TOP_END : StopServo(); /*Serial << "top end\n";*/ mode = MODE_IDLE; break;
+       case STATE_AT_TOP_END : StopServo(); Serial << "top end\n"; mode = MODE_IDLE; break;
 
    }
 }
@@ -234,7 +252,7 @@ void ProcessClosing ()
 
 void UnlockCam()
 {
-  myservo.write(SERVO_POSITION_UNLOCK);
+  myservo.writeMicroseconds(SERVO_POSITION_UNLOCK);
   OutMotor(MOTOR_UNLOCKER,1); 
   delay (500); 
   OutMotor(MOTOR_UNLOCKER,0); 
@@ -434,7 +452,7 @@ void TestServo()
   if  (pos >= 180)
   pos = 180;
   if (!off_servo)
-  myservo.write(pos);
+  myservo.writeMicroseconds(pos);
 
 }
 
@@ -452,13 +470,13 @@ void SetServo(int position_target)
 */
     if (!myservo.attached())
         myservo.attach(PIN_PWM_SERVO);
-    myservo.write(position_target);
+    myservo.writeMicroseconds(position_target);
     servo_stopped = false;
 }
 
 void EvaluateState()
 {
-  static unsigned short count_debounce = 0;
+  static short count_debounce = 0;
   //Read Servo feedback 
   current_pos = ScalePosition();
   if (show_position)
@@ -494,12 +512,14 @@ void EvaluateState()
  {
   count_debounce ++;
  }
- else count_debounce = 0;
-
+ else count_debounce --;
+ if (count_debounce < 0)
+  count_debounce = 0;  
+ 
  if (count_debounce >= 10)
  {
   state = STATE_AT_TOP_END;
-  count_debounce = 11; // bound counter
+  count_debounce = 10; // bound counter
  }
    
   
@@ -536,7 +556,7 @@ unsigned int ScalePosition ()
 
 //1024 - anain
 
-  float scaledpos = 1024- analogRead (PIN_SERVO_FEEDBACK);
+  float scaledpos = analogRead (PIN_SERVO_FEEDBACK) *1.0683760684+964.74;
 
   raw_position [pos_average_steps] = scaledpos;
   pos_average_steps++;
@@ -556,7 +576,7 @@ unsigned int ScalePosition ()
   average = average / ANALOG_AVERAGING_STEPS;
 
   unsigned int output;
-  output = (unsigned int) (average *0.183673 - 7.7142857); // line between points (42,0) and (1022, 180)
+  output = (unsigned int) (average ); 
   //if (displayout) Serial <<" Ana reading " << scaledpos <<"average "<<  average << "  pos corresponds to " <<output<< "\n";
   return output;
 
@@ -647,7 +667,8 @@ void CurrentProtection()
     average = average / ANALOG_AVERAGING_STEPS;
 
    float current_limit = CURRENT_LIMIT;  
-   if (pos >= 150)
+   
+   if (current_pos >= SERVO_POSITION_ENGAGEMENT_INCREASE_CURRENT)
    {   
    current_limit += CURRENT_EXTRA_ALLOWANCE_LOCK;
    }
