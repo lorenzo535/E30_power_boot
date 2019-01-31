@@ -51,17 +51,17 @@ Switch InputRemoteButton= Switch (LOCK_BUTTON_REMOTE, INPUT,LOW,200,300,250,10);
 //////////////////////////////////////
 
 #define SERVO_POSITION_ENGAGEMENT 2000
-#define SERVO_POSITION_ENGAGEMENT_INCREASE_CURRENT 1900
+#define SERVO_POSITION_ENGAGEMENT_INCREASE_CURRENT 1800
 #define SERVO_POSITION_TOP_END 1000
-#define SERVO_POSITION_UNLOCK 165
-#define POSITION_TOLERANCE 10
+#define SERVO_POSITION_UNLOCK 1900
+#define POSITION_TOLERANCE 100
 
 #define CAM_COMMAND_GO_TO_LOCK -1
 #define CAM_COMMAND_UNLOCK 1
-#define CURRENT_LIMIT 1.1
+#define CURRENT_LIMIT 3.0
   
-  #define CURRENT_EXTRA_ALLOWANCE_LOCK 1
-#define OVERCURRENT_CONSECUTIVE_STEPS 5
+  #define CURRENT_EXTRA_ALLOWANCE_LOCK 2.6
+#define OVERCURRENT_CONSECUTIVE_STEPS 2
 #define MV_PER_AMP 100
 #define POS_FEEDBACK_LOW_BOUND 1000
 #define POS_FEEDBACK_HIGH_BOUND 2000
@@ -144,7 +144,7 @@ void setup() {
 }
 
 void StopServo()
-{
+{ 
   if (servo_stopped)
   return;
   int i;
@@ -171,12 +171,9 @@ void loop() {
  //TestServo();
  
   if (show_mode)
-   Serial << "Current mode " << mode << " \n";
+    DisplayModeAndState();
  
-  //delay (50);
   ReadKeyboardCmds();
- 
- //return;
   
   EvaluateState();
 
@@ -269,7 +266,36 @@ void LockCam()
 }
 
 
+void DisplayModeAndState()
+{
+  static short u = 0;
+  if (u < 40)
+  {
+    u++;
+    return;
+  }
+  u = 0;
+   
+   Serial << "Current mode: " ;
+    
+     switch (mode)
+     {
+      case MODE_IDLE : Serial << " IDLE "; break;
+      case MODE_OPENING : Serial << " MODE_OPENING ";  break;
+      case MODE_CLOSING : Serial << " MODE_CLOSING "; break;
+      case MODE_SAFETY_CLOSING : Serial << " MODE_SAFETY_CLOSING "; break;
+      case MODE_MANUAL_STOP: Serial << " MODE_MANUAL_STOP"; break;
+     }
 
+  Serial << "Current state: " ;
+     switch (state)
+   {
+       case STATE_BOOT_LOCKED : Serial << "BOOT LOCKED \n"; break;
+       case STATE_ENGAGED  : Serial << "BOOT ENGAGED \n"; break;
+       case STATE_SWINGING :  Serial << "SWINGING \n"; break;
+       case STATE_AT_TOP_END : Serial << "AT TOP END \n"; break;
+   }
+}
 
 
 
@@ -412,11 +438,7 @@ return;
       case MODE_MANUAL_STOP: Serial << " MODE_MANUAL_STOP\n"; break;
      }
     }
-      
-      
-      
-      
-
+                      
     old_mode = mode;
 }
 
@@ -460,14 +482,15 @@ void TestServo()
 void SetServo(int position_target)
 {
     static int current_target = -1;
-/*
-    if (position_target == current_target)
+
+   if (position_target != current_target)
     {   
-        Serial << "servo at target \n";
-        return;
+        Serial << "sservo go to  target" << position_target<<" \n";
+        //return;
     }
     current_target = position_target;
-*/
+
+    
     if (!myservo.attached())
         myservo.attach(PIN_PWM_SERVO);
     myservo.writeMicroseconds(position_target);
@@ -675,7 +698,7 @@ void CurrentProtection()
    
    if (show_current_measure)
    {
-     if (skip >= 3)
+     if (skip >= 30)
      {
          Serial << " current measure " << fabs(average) << " (A)  LIMIT : " << current_limit << "\n";
          skip = 0;
@@ -699,9 +722,11 @@ void CurrentProtection()
               Serial << "##### current limit reached " << fabs(average) << " (A) \n";
               StopServo();
               if (mode== MODE_CLOSING)
-              mode = MODE_SAFETY_CLOSING;
-              else 
+        //      mode = MODE_SAFETY_CLOSING;
+        //      else 
               mode == MODE_IDLE;
+           
+              delay (500);
             }
           }
     }
