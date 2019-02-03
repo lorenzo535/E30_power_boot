@@ -50,17 +50,17 @@ Switch InputRemoteButton= Switch (LOCK_BUTTON_REMOTE, INPUT,LOW,200,300,250,10);
 #define STATE_AT_TOP_END 3
 //////////////////////////////////////
 
-#define SERVO_POSITION_ENGAGEMENT 2000
-#define SERVO_POSITION_ENGAGEMENT_INCREASE_CURRENT 1800
-#define SERVO_POSITION_TOP_END 1000
-#define SERVO_POSITION_UNLOCK 1900
-#define POSITION_TOLERANCE 100
+#define SERVO_POSITION_ENGAGEMENT 100
+#define SERVO_POSITION_ENGAGEMENT_INCREASE_CURRENT 95
+#define SERVO_POSITION_TOP_END 60
+#define SERVO_POSITION_UNLOCK 105
+#define POSITION_TOLERANCE 4
 
 #define CAM_COMMAND_GO_TO_LOCK -1
 #define CAM_COMMAND_UNLOCK 1
 #define CURRENT_LIMIT 3.0
   
-  #define CURRENT_EXTRA_ALLOWANCE_LOCK 2.6
+  #define CURRENT_EXTRA_ALLOWANCE_LOCK 0.6
 #define OVERCURRENT_CONSECUTIVE_STEPS 2
 #define MV_PER_AMP 100
 #define POS_FEEDBACK_LOW_BOUND 1000
@@ -493,7 +493,7 @@ void SetServo(int position_target)
     
     if (!myservo.attached())
         myservo.attach(PIN_PWM_SERVO);
-    myservo.writeMicroseconds(position_target);
+    myservo.write(position_target);
     servo_stopped = false;
 }
 
@@ -579,7 +579,7 @@ unsigned int ScalePosition ()
 
 //1024 - anain
 
-  float scaledpos = analogRead (PIN_SERVO_FEEDBACK) *1.0683760684+964.74;
+  float scaledpos = analogRead (PIN_SERVO_FEEDBACK) /1024.0 * 5.0; //in volts
 
   raw_position [pos_average_steps] = scaledpos;
   pos_average_steps++;
@@ -599,6 +599,9 @@ unsigned int ScalePosition ()
   average = average / ANALOG_AVERAGING_STEPS;
 
   unsigned int output;
+  float x = average;
+  //polynomial approximation in use with 10 turn potentiometer
+  average = 88.1593538351*x*x*x*x - 869.9926535361*x*x*x + 3208.9184567625*x*x - 5385.4931352597*x + 3698.1106094017;
   output = (unsigned int) (average ); 
   //if (displayout) Serial <<" Ana reading " << scaledpos <<"average "<<  average << "  pos corresponds to " <<output<< "\n";
   return output;
