@@ -50,18 +50,18 @@ Switch InputRemoteButton= Switch (LOCK_BUTTON_REMOTE, INPUT,LOW,200,300,250,10);
 #define STATE_AT_TOP_END 3
 //////////////////////////////////////
 
-#define SERVO_POSITION_ENGAGEMENT 100
-#define SERVO_POSITION_ENGAGEMENT_INCREASE_CURRENT 95
-#define SERVO_POSITION_TOP_END 60
-#define SERVO_POSITION_UNLOCK 105
+#define SERVO_POSITION_ENGAGEMENT 129
+#define SERVO_POSITION_ENGAGEMENT_INCREASE_CURRENT 125
+#define SERVO_POSITION_TOP_END 70
+#define SERVO_POSITION_UNLOCK 122
 #define POSITION_TOLERANCE 4
 
 #define CAM_COMMAND_GO_TO_LOCK -1
 #define CAM_COMMAND_UNLOCK 1
-#define CURRENT_LIMIT 3.0
+#define CURRENT_LIMIT 2.8
   
-  #define CURRENT_EXTRA_ALLOWANCE_LOCK 0.6
-#define OVERCURRENT_CONSECUTIVE_STEPS 2
+  #define CURRENT_EXTRA_ALLOWANCE_LOCK 2
+#define OVERCURRENT_CONSECUTIVE_STEPS 4
 #define MV_PER_AMP 100
 #define POS_FEEDBACK_LOW_BOUND 1000
 #define POS_FEEDBACK_HIGH_BOUND 2000
@@ -711,7 +711,7 @@ void CurrentProtection()
   
     
     unsigned long deltat;
-    if ((fabs(average) >= current_limit)&&(state ==STATE_SWINGING) )
+    if ((fabs(average) >= current_limit)&&(state ==STATE_SWINGING)&&(mode != MODE_OPENING) )
     {
           overcurrent_cnt++;
 
@@ -722,7 +722,7 @@ void CurrentProtection()
             //Inhibit first two seconds after servo has started moving
             if (deltat >= 2000)
             {
-              Serial << "##### current limit reached " << fabs(average) << " (A) \n";
+              Serial << "##### current limit reached " << fabs(average) << " (A) ; current position is " << current_pos <<"\n";
               StopServo();
               if (mode== MODE_CLOSING)
         //      mode = MODE_SAFETY_CLOSING;
