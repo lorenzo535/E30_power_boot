@@ -53,7 +53,7 @@ Switch InputRemoteButton= Switch (LOCK_BUTTON_REMOTE, INPUT,LOW,200,300,250,10);
 #define SERVO_POSITION_ENGAGEMENT 129
 #define SERVO_POSITION_ENGAGEMENT_INCREASE_CURRENT 118
 #define SERVO_POSITION_TOP_END 70
-#define SERVO_POSITION_UNLOCK 122
+#define SERVO_POSITION_UNLOCK 117
 #define POSITION_TOLERANCE 6
 
 #define CAM_COMMAND_GO_TO_LOCK -1
@@ -531,7 +531,7 @@ void EvaluateState()
  if (!sw1 && !sw2)
   state = STATE_SWINGING;
 
- if (abs (current_pos - SERVO_POSITION_TOP_END) <=  POSITION_TOLERANCE)
+ if ((abs (current_pos - SERVO_POSITION_TOP_END) <=  POSITION_TOLERANCE) || (current_pos <= (SERVO_POSITION_TOP_END - POSITION_TOLERANCE)))
  {
   count_debounce ++;
  }
