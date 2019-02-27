@@ -50,7 +50,7 @@ Switch InputRemoteButton= Switch (LOCK_BUTTON_REMOTE, INPUT,LOW,200,300,250,10);
 #define STATE_AT_TOP_END 3
 //////////////////////////////////////
 
-#define SERVO_POSITION_ENGAGEMENT 129
+#define SERVO_POSITION_ENGAGEMENT 135
 #define SERVO_POSITION_ENGAGEMENT_INCREASE_CURRENT 118
 #define SERVO_POSITION_TOP_END 70
 #define SERVO_POSITION_UNLOCK 117
@@ -60,7 +60,7 @@ Switch InputRemoteButton= Switch (LOCK_BUTTON_REMOTE, INPUT,LOW,200,300,250,10);
 #define CAM_COMMAND_UNLOCK 1
 #define CURRENT_LIMIT 3 //2.8
   
-  #define CURRENT_EXTRA_ALLOWANCE_LOCK 2
+  #define CURRENT_EXTRA_ALLOWANCE_LOCK 1
 #define OVERCURRENT_CONSECUTIVE_STEPS 4
 #define MV_PER_AMP 100
 #define POS_FEEDBACK_LOW_BOUND 1000
@@ -153,17 +153,25 @@ void StopServo()
 
   for (i = 0; i < 3; i++)
   {
-  myservo.writeMicroseconds(pos);
+  myservo.write(pos);
   delay (100);
   }
     
   mode = MODE_IDLE;
-  
+
+ 
 }
 
 
 
 void loop() {
+
+// PowerDrivesOn();
+// UnlockCam();
+// delay(2000);
+// LockCam();
+ //delay(2000);
+ //return;
 
   InputButton.poll();
   InputRemoteButton.poll();
@@ -189,7 +197,23 @@ void loop() {
      case MODE_MANUAL_STOP : StopServo(); break;
      case MODE_SAFETY_CLOSING : mode = MODE_IDLE; break;
 
-     case MODE_IDLE :  StopServo(); OutMotor(MOTOR_CAM, 0); OutMotor(MOTOR_UNLOCKER, 0); myservo.detach(); PowerDrivesOff(); break;
+     case MODE_IDLE :  { if (current_pos < SERVO_POSITION_TOP_END -POSITION_TOLERANCE)
+                                SetServo(SERVO_POSITION_TOP_END);
+                      /*          else
+                                if (current_pos > SERVO_POSITION_ENGAGEMENT +POSITION_TOLERANCE)
+                                SetServo(SERVO_POSITION_ENGAGEMENT);
+                                */
+                                
+                                else
+                                {
+                                    StopServo(); 
+                                    OutMotor(MOTOR_CAM, 0); 
+                                    OutMotor(MOTOR_UNLOCKER, 0); 
+                                    myservo.detach(); 
+                                    PowerDrivesOff(); 
+                                }
+     break;
+     }
      default: 
       StopServo();
   }
@@ -249,7 +273,7 @@ void ProcessClosing ()
 
 void UnlockCam()
 {
-  myservo.writeMicroseconds(SERVO_POSITION_UNLOCK);
+  myservo.write(SERVO_POSITION_UNLOCK);
   OutMotor(MOTOR_UNLOCKER,1); 
   delay (500); 
   OutMotor(MOTOR_UNLOCKER,0); 
@@ -474,7 +498,7 @@ void TestServo()
   if  (pos >= 180)
   pos = 180;
   if (!off_servo)
-  myservo.writeMicroseconds(pos);
+  myservo.write(pos);
 
 }
 
@@ -512,38 +536,38 @@ void EvaluateState()
   if (show_switches)
   Serial << "sw1 " << sw1 << "  sw2 " << sw2 << "\n";
 
-  // handling sw1
-  if (old_sw1 != sw1)
+state = STATE_SWINGING;
     if (sw1)
     {      
           state = STATE_ENGAGED;
-          Serial << "Engaged ! \n";
+          //Serial << "Engaged ! \n";
     }
     
-  // handling sw2
-  if (old_sw2 != sw2)
+  
     if (sw2)
     {      
           state = STATE_BOOT_LOCKED;
-          Serial << "Boot locked ! \n";
+          //Serial << "Boot locked ! \n";
     }
 
- if (!sw1 && !sw2)
-  state = STATE_SWINGING;
-
+ 
+if (!sw1 && !sw2)
+{
  if ((abs (current_pos - SERVO_POSITION_TOP_END) <=  POSITION_TOLERANCE) || (current_pos <= (SERVO_POSITION_TOP_END - POSITION_TOLERANCE)))
  {
   count_debounce ++;
+    if (count_debounce >= 10)
+   {
+    state = STATE_AT_TOP_END;
+    count_debounce = 10; // bound counter
+   }
+ 
  }
  else count_debounce --;
  if (count_debounce < 0)
   count_debounce = 0;  
+}
  
- if (count_debounce >= 10)
- {
-  state = STATE_AT_TOP_END;
-  count_debounce = 10; // bound counter
- }
    
   
  old_sw1 = sw1;
@@ -630,7 +654,11 @@ void ReadKeyboardCmds()
       switch (rx_byte) 
       {
        case 'M':
-       case 'm': show_mode = !show_mode ;
+       case 'm': show_mode = !show_mode ; break;
+       case 'U':
+       case 'u': Serial << "Unlock cam\n"; PowerDrivesOn(); UnlockCam(); PowerDrivesOff(); break;
+       case 'L':
+       case 'l': Serial << "Lock cam\n"; PowerDrivesOn(); LockCam(); PowerDrivesOff(); break;
        case 'P':
        case 'p': Serial << "+5 \n" ; pos = pos + 5; break;
        case 'T':
@@ -729,7 +757,7 @@ void CurrentProtection()
         //      else 
               mode == MODE_IDLE;
            
-              delay (500);
+              //delay (500);
             }
           }
     }
