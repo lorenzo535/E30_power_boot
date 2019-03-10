@@ -278,15 +278,30 @@ void UnlockCam()
   delay (500); 
   OutMotor(MOTOR_UNLOCKER,0); 
   OutMotor(MOTOR_CAM, CAM_COMMAND_UNLOCK); 
-  delay (1500);
+  delay (600);
   OutMotor(MOTOR_CAM,0);
 }
 
 void LockCam()
 {
+  unsigned long start_time = millis();
   OutMotor(MOTOR_CAM, CAM_COMMAND_GO_TO_LOCK); 
-  delay (1000);
- // OutMotor(MOTOR_CAM,0);
+  do
+  {
+    if ( digitalRead (PIN_LOCK_SW2))
+      {
+        Serial << "got to locked position ... STOP!!!! " << millis() - start_time << "  \n";
+        OutMotor(MOTOR_CAM,0);
+        return;
+        
+      }      
+  delay (2);
+  
+  } while( (millis() - start_time) <= 1000);
+  
+  Serial << "out on timeout ... STOP!!!! \n";
+  OutMotor(MOTOR_CAM,0);
+  
 }
 
 
