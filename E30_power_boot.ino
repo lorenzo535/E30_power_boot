@@ -165,6 +165,9 @@ void StopServo()
 
 
 void loop() {
+//Serial << digitalRead (PIN_INPUT_1) << "  " << digitalRead (PIN_INPUT_2)<< digitalRead (PIN_INPUT_3) << "  " << digitalRead (PIN_INPUT_4) <<"\n";
+//delay(200);
+//return;
 
 // PowerDrivesOn();
 // UnlockCam();
@@ -277,8 +280,24 @@ void UnlockCam()
   OutMotor(MOTOR_UNLOCKER,1); 
   delay (500); 
   OutMotor(MOTOR_UNLOCKER,0); 
+  
+  unsigned long start_time = millis();
   OutMotor(MOTOR_CAM, CAM_COMMAND_UNLOCK); 
-  delay (600);
+   
+  do
+  {
+    if ( digitalRead (PIN_INPUT_4))
+      {
+        Serial << "got to unlock cam position ... STOP!!!! " << millis() - start_time << "  \n";
+        OutMotor(MOTOR_CAM,0);
+        return;      
+      }      
+  delay (2);
+  
+  } while( (millis() - start_time) <= 1300);
+  
+  Serial << " Cam unlock out on timeout ... STOP!!!! \n";
+     
   OutMotor(MOTOR_CAM,0);
 }
 
@@ -568,13 +587,16 @@ state = STATE_SWINGING;
  
 if (!sw1 && !sw2)
 {
- if ((abs (current_pos - SERVO_POSITION_TOP_END) <=  POSITION_TOLERANCE) || (current_pos <= (SERVO_POSITION_TOP_END - POSITION_TOLERANCE)))
+ if ((abs (current_pos - SERVO_POSITION_TOP_END) <=  POSITION_TOLERANCE-4)  || (current_pos <= (SERVO_POSITION_TOP_END)))
  {
+
+ //Serial << "xount = " << count_debounce << "position = " << current_pos << "\n";
   count_debounce ++;
-    if (count_debounce >= 10)
+  if (count_debounce >= 10)
    {
     state = STATE_AT_TOP_END;
     count_debounce = 10; // bound counter
+    
    }
  
  }
