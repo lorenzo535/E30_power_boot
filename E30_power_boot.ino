@@ -316,7 +316,7 @@ void LockCam()
       }      
   delay (2);
   
-  } while( (millis() - start_time) <= 1000);
+  } while( (millis() - start_time) <= 1300);
   
   Serial << "out on timeout ... STOP!!!! \n";
   OutMotor(MOTOR_CAM,0);
