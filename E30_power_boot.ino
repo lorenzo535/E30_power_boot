@@ -265,7 +265,7 @@ void ProcessClosing ()
     case STATE_AT_TOP_END :
     case STATE_SWINGING :  SetServo(SERVO_POSITION_ENGAGEMENT); /*Serial << "process cl top end , swinging\n";*/  break;
 
-    case STATE_ENGAGED  : LockCam(); StopServo();  /*erial << "process closing state engaged \n"; */ break;
+    case STATE_ENGAGED  :  StopServo();  LockCam();/*erial << "process closing state engaged \n"; */ break;
 
     case STATE_BOOT_LOCKED : OutMotor(MOTOR_CAM,0); /*Serial << "process cl boot mocked\n";*/mode = MODE_IDLE; break;
     }
