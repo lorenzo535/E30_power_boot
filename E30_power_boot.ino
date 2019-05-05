@@ -5,7 +5,19 @@
 #include "Switch.h"
 
 Servo myservo;  // create servo object to control a servo
+#include <NewPing.h>
 
+//Variables and constants for ultrasound switch
+unsigned long t1, t2,t3,t4, old_millis, now_millis, time_sig;
+unsigned short cycle;
+unsigned int  dist, old_dist;
+bool show_us_distance;
+#define DIST_LOW 28
+#define DIST_HIGH 30
+#define PIN_US_TRIG  A3
+#define PIN_US_ECHO  4
+#define MAX_DISTANCE 60
+NewPing sonar(PIN_US_TRIG, PIN_US_ECHO, MAX_DISTANCE); // NewPing setup of pins and maximum distance.
 
 // Pin defintion on Pro Micro board
 #define PIN_LOCK_SW1 3
@@ -113,6 +125,9 @@ void setup() {
   pinMode(PIN_PWM_MOTOR_UNLOCKER,OUTPUT);
   pinMode(POWER_DRIVES,OUTPUT);
 
+  pinMode (PIN_US_TRIG, OUTPUT);
+  pinMode (PIN_US_ECHO, INPUT);
+
   StopServo();
   old_sw1 = 0;
   old_sw2 = 0;
@@ -140,6 +155,16 @@ void setup() {
   mode_when_stopped_was = MODE_IDLE;
   drivers_on = true;
   PowerDrivesOff();
+
+  cycle = 0;
+  t1 = millis();
+  t2 = t1;
+  t3 = t2;
+  t4 = t3;
+  time_sig = t1;
+  dist = 20;
+  show_us_distance = false;
+  old_millis = t1;
 
 }
 
@@ -200,7 +225,16 @@ void loop() {
      case MODE_MANUAL_STOP : StopServo(); break;
      case MODE_SAFETY_CLOSING : mode = MODE_IDLE; break;
 
-     case MODE_IDLE :  { if (current_pos < SERVO_POSITION_TOP_END -POSITION_TOLERANCE)
+     case MODE_IDLE :  {    if ( FootSwitch()) 
+                            {
+                                      if (state == STATE_BOOT_LOCKED) 
+                                          mode = MODE_OPENING; 
+                                      else
+                                          mode = MODE_CLOSING;
+                            break;
+                            }
+                                                   
+                            if (current_pos < SERVO_POSITION_TOP_END -POSITION_TOLERANCE)
                                 SetServo(SERVO_POSITION_TOP_END);
                       /*          else
                                 if (current_pos > SERVO_POSITION_ENGAGEMENT +POSITION_TOLERANCE)
@@ -702,6 +736,8 @@ void ReadKeyboardCmds()
        case 't': Serial << "go to top end \n" ; pos = 180; break;
        case 'B':
        case 'b': Serial << "go to bottom end \n" ; pos = 0; break;
+       case 'D':
+       case 'd': Serial << "show US distance \n"; show_us_distance = ! show_us_distance; break;
        case 'C':
        case 'c': Serial << "show current \n"; show_current_measure = ! show_current_measure; break;
        case 'Z':
@@ -814,4 +850,58 @@ float ADCValueToCurrent (long int adc_in)
   return ((mv - 2500) / MV_PER_AMP);
 
 }
+
+
+
+
+bool FootSwitch()
+{
+  now_millis = millis();
+  if ((now_millis - old_millis) <= 30)
+  {
+    return false;
+  }
+  old_millis = now_millis;
+  
+  dist = sonar.ping_cm(); 
+
+  if ( (cycle != 0) && (now_millis - time_sig > 2000) )
+  { cycle = 0;
+  Serial << "   ****   RESET !!\n";
+  }
+ 
+if (show_us_distance)  Serial << "distance : "<< dist<< "\n";
+
+  if (abs (dist -old_dist) >= 5) 
+  {
+    time_sig = now_millis;
+    switch (cycle)
+    {
+      case 0: if ( dist <= DIST_LOW) 
+              { cycle++; t1 = time_sig; Serial << "t1 : " << t1 << "\n"; } break;
+      case 1:if ( dist >= DIST_HIGH) 
+              { cycle++; t2 = time_sig;Serial << "t2 : " << t2 << "\n";} break;
+      case 2:if ( dist <= DIST_LOW) 
+              { cycle++; t3 = time_sig;Serial << "t3 : " << t3 << "\n";} break;
+      case 3:if ( dist >= DIST_HIGH) 
+              { cycle++; t4 = time_sig;Serial << "t4 : " << t4 << "\n";} break;      
+    }    
+  }
+  if (cycle == 4)
+  {
+    Serial << "t2 - t1: ==" << t2-t1 << "== ; t3 - t2: **" << t3-t2 << "**  t4 - t3: %%" << t4-t3<<"%%\n";
+    cycle = 0;
+    if  ( ( (t2 -t1) <= 400)  && ((t2 -t1) >= 10) &&
+          ( (t3 -t2) <= 1500) && ((t3 -t2) >= 200) &&
+          ( (t4 -t3) <= 400) && ((t4 -t3) >= 2) ) 
+          {
+          Serial << "GOT IT !!!!!! \n";
+          return true;
+          }
+  }
+  
+  old_dist = dist;
+  return false;
+}
+
 
