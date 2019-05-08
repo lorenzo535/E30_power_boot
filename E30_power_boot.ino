@@ -80,6 +80,8 @@ Switch InputRemoteButton= Switch (LOCK_BUTTON_REMOTE, INPUT,LOW,200,300,250,10);
 #define MOTOR_CAM 1
 #define MOTOR_UNLOCKER 2
 
+
+
 unsigned short mode, old_mode, mode_when_stopped_was;
 unsigned short state,old_state;
 int pos = 0;    // variable to store the servo position
@@ -225,7 +227,7 @@ void loop() {
      case MODE_MANUAL_STOP : StopServo(); break;
      case MODE_SAFETY_CLOSING : mode = MODE_IDLE; break;
 
-     case MODE_IDLE :  {    if ( FootSwitch()) 
+     case MODE_IDLE :  {    if ( FootSwitchKeep()) 
                             {
                                       if (state == STATE_BOOT_LOCKED) 
                                           mode = MODE_OPENING; 
@@ -854,7 +856,7 @@ float ADCValueToCurrent (long int adc_in)
 
 
 
-bool FootSwitch()
+bool FootSwitchFlip()
 {
   now_millis = millis();
   if ((now_millis - old_millis) <= 30)
@@ -904,4 +906,56 @@ if (show_us_distance)  Serial << "distance : "<< dist<< "\n";
   return false;
 }
 
+#define FOOT_KEEP_DELAY 650
 
+bool FootSwitchKeep()
+{  
+  now_millis = millis();
+  if ((now_millis - old_millis) <= 30)
+  {
+    return false;
+  }
+  old_millis = now_millis;
+  
+  dist = sonar.ping_cm(); 
+  
+  if (show_us_distance)  Serial << "distance : "<< dist<< "\n";
+
+  if (abs (dist -old_dist) >= 5) 
+  {
+    time_sig = now_millis;
+    if ( dist <= DIST_LOW)
+    {
+      if (cycle ==0)
+      {
+        t1 = time_sig; 
+        Serial << "t1 : " << t1 << "\n";   
+        cycle = 1;  
+      }
+     }
+     else
+     {
+      Serial << "Foot removed, counter reset !!!!! \n";
+      cycle = 0;
+      old_dist = dist;      
+      return false;
+     }     
+  }
+  
+  if (cycle ==1)
+  {
+    if ((now_millis - t1) >= FOOT_KEEP_DELAY)
+    {
+      Serial << "GOT IT !!!!!! \n";
+      old_dist = dist;
+      cycle = 0;
+      return true;
+    }
+    else
+      Serial << "Counting .... dt is " << now_millis -t1 <<"\n";
+  }
+
+  old_dist = dist;
+  return false;
+}    
+    
