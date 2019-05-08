@@ -12,11 +12,11 @@ unsigned long t1, t2,t3,t4, old_millis, now_millis, time_sig;
 unsigned short cycle;
 unsigned int  dist, old_dist;
 bool show_us_distance;
-#define DIST_LOW 28
+#define DIST_LOW 24
 #define DIST_HIGH 30
 #define PIN_US_TRIG  A3
 #define PIN_US_ECHO  4
-#define MAX_DISTANCE 60
+#define MAX_DISTANCE 50
 NewPing sonar(PIN_US_TRIG, PIN_US_ECHO, MAX_DISTANCE); // NewPing setup of pins and maximum distance.
 
 // Pin defintion on Pro Micro board
@@ -891,9 +891,9 @@ if (show_us_distance)  Serial << "distance : "<< dist<< "\n";
   {
     Serial << "t2 - t1: ==" << t2-t1 << "== ; t3 - t2: **" << t3-t2 << "**  t4 - t3: %%" << t4-t3<<"%%\n";
     cycle = 0;
-    if  ( ( (t2 -t1) <= 400)  && ((t2 -t1) >= 10) &&
+    if  ( ( (t2 -t1) <= 400)  && ((t2 -t1) >= 40) &&
           ( (t3 -t2) <= 1500) && ((t3 -t2) >= 200) &&
-          ( (t4 -t3) <= 400) && ((t4 -t3) >= 2) ) 
+          ( (t4 -t3) <= 400) && ((t4 -t3) >= 40) ) 
           {
           Serial << "GOT IT !!!!!! \n";
           return true;
