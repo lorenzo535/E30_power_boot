@@ -230,7 +230,7 @@ void loop() {
     case MODE_SAFETY_CLOSING : mode = MODE_IDLE; break;
 
     case MODE_IDLE :  {
-        if ( FootSwitchSwing() & !isMotorRunning())
+        if ( FootSwitchSwing() && !isMotorRunning())
         {
           if (state == STATE_BOOT_LOCKED)
             mode = MODE_OPENING;
