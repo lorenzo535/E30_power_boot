@@ -62,7 +62,7 @@ Switch InputRemoteButton = Switch (LOCK_BUTTON_REMOTE, INPUT, LOW, 200, 300, 250
 #define STATE_AT_TOP_END 3
 //////////////////////////////////////
 
-#define SERVO_POSITION_ENGAGEMENT 135
+#define SERVO_POSITION_ENGAGEMENT 131
 #define SERVO_POSITION_ENGAGEMENT_INCREASE_CURRENT 118
 #define SERVO_POSITION_TOP_END 70
 #define SERVO_POSITION_UNLOCK 117
@@ -194,9 +194,9 @@ void StopServo()
 void loop() {
 
 
-  //Serial << digitalRead (PIN_INPUT_1) << "  " << digitalRead (PIN_INPUT_2)<< digitalRead (PIN_INPUT_3) << "  " << digitalRead (PIN_INPUT_4) <<"\n";
-  //delay(200);
-  //return;
+//Serial << digitalRead (PIN_INPUT_1) << "  " << digitalRead (PIN_INPUT_2)<< digitalRead (PIN_INPUT_3) << "  " << digitalRead (PIN_INPUT_4) <<"\n";
+ // delay(200);
+ // return;
 
   // PowerDrivesOn();
   // UnlockCam();
@@ -304,7 +304,7 @@ void ProcessClosing ()
     case STATE_AT_TOP_END :
     case STATE_SWINGING :  SetServo(SERVO_POSITION_ENGAGEMENT); /*Serial << "process cl top end , swinging\n";*/  break;
 
-    case STATE_ENGAGED  :  StopServo();  LockCam();/*erial << "process closing state engaged \n"; */ break;
+    case STATE_ENGAGED  :  LockCam(); StopServo();  /*erial << "process closing state engaged \n"; */ break;
 
     case STATE_BOOT_LOCKED : OutMotor(MOTOR_CAM, 0); /*Serial << "process cl boot mocked\n";*/mode = MODE_IDLE; break;
   }
@@ -550,7 +550,10 @@ boolean isCarLocked()
 
 boolean isMotorRunning()
 {
-  return digitalRead(MOTOR_RUNNING);
+ //return true;
+  bool in = digitalRead(MOTOR_RUNNING);
+  Serial << "in " << in <<"\n";
+  return in;
 }
 
 boolean isCarMoving()
@@ -929,7 +932,7 @@ bool FootSwitchSwing()
     }
   }
 
-    if (show_us_distance)  Serial << "Swing ; distance : " << dist <<" cycle:" <<cycle <<"\n";
+    if (show_us_distance)  Serial << "Swing ; distance : " << dist <<" cycle:" <<cycle <<" Mot-or on: " << digitalRead(MOTOR_RUNNING) <<"\n";
   
   if (cycle == 4)
   {
