@@ -62,9 +62,9 @@ Switch InputRemoteButton = Switch (LOCK_BUTTON_REMOTE, INPUT, LOW, 200, 300, 250
 #define STATE_AT_TOP_END 3
 //////////////////////////////////////
 
-#define SERVO_POSITION_ENGAGEMENT 131
+#define SERVO_POSITION_ENGAGEMENT 133
 #define SERVO_POSITION_ENGAGEMENT_INCREASE_CURRENT 118
-#define SERVO_POSITION_TOP_END 70
+#define SERVO_POSITION_TOP_END 71
 #define SERVO_POSITION_UNLOCK 117
 #define POSITION_TOLERANCE 6
 
@@ -304,7 +304,7 @@ void ProcessClosing ()
     case STATE_AT_TOP_END :
     case STATE_SWINGING :  SetServo(SERVO_POSITION_ENGAGEMENT); /*Serial << "process cl top end , swinging\n";*/  break;
 
-    case STATE_ENGAGED  :  LockCam(); StopServo();  /*erial << "process closing state engaged \n"; */ break;
+    case STATE_ENGAGED  :  SetServo(SERVO_POSITION_ENGAGEMENT-2);LockCam(); StopServo();  /*erial << "process closing state engaged \n"; */ break;
 
     case STATE_BOOT_LOCKED : OutMotor(MOTOR_CAM, 0); /*Serial << "process cl boot mocked\n";*/mode = MODE_IDLE; break;
   }
