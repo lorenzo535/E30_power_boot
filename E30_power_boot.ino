@@ -1,3 +1,6 @@
+//Actual board
+//ARDUINO Leonardo
+
 
 #include <Servo.h>
 #include <Streaming.h>
@@ -62,18 +65,18 @@ Switch InputRemoteButton = Switch (LOCK_BUTTON_REMOTE, INPUT, LOW, 200, 300, 250
 #define STATE_AT_TOP_END 3
 //////////////////////////////////////
 
-#define SERVO_POSITION_ENGAGEMENT 133
+#define SERVO_POSITION_ENGAGEMENT 134
 #define SERVO_POSITION_ENGAGEMENT_INCREASE_CURRENT 118
-#define SERVO_POSITION_TOP_END 71
-#define SERVO_POSITION_UNLOCK 117
+#define SERVO_POSITION_TOP_END 72
+#define SERVO_POSITION_UNLOCK 120
 #define POSITION_TOLERANCE 6
 
 #define CAM_COMMAND_GO_TO_LOCK -1
 #define CAM_COMMAND_UNLOCK 1
-#define CURRENT_LIMIT 3 //2.8
+#define CURRENT_LIMIT 6 //2.8
 
-#define CURRENT_EXTRA_ALLOWANCE_LOCK 1
-#define OVERCURRENT_CONSECUTIVE_STEPS 4
+#define CURRENT_EXTRA_ALLOWANCE_LOCK 5.0    // <===============================
+#define OVERCURRENT_CONSECUTIVE_STEPS 40
 #define MV_PER_AMP 100
 #define POS_FEEDBACK_LOW_BOUND 1000
 #define POS_FEEDBACK_HIGH_BOUND 2000
@@ -239,7 +242,7 @@ void loop() {
           break;
         }
 
-        if (current_pos < SERVO_POSITION_TOP_END - POSITION_TOLERANCE)
+        if (0)//current_pos < SERVO_POSITION_TOP_END - POSITION_TOLERANCE)
           SetServo(SERVO_POSITION_TOP_END);
         /*          else
                   if (current_pos > SERVO_POSITION_ENGAGEMENT +POSITION_TOLERANCE)
@@ -304,7 +307,7 @@ void ProcessClosing ()
     case STATE_AT_TOP_END :
     case STATE_SWINGING :  SetServo(SERVO_POSITION_ENGAGEMENT); /*Serial << "process cl top end , swinging\n";*/  break;
 
-    case STATE_ENGAGED  :  SetServo(SERVO_POSITION_ENGAGEMENT-2);LockCam(); StopServo();  /*erial << "process closing state engaged \n"; */ break;
+    case STATE_ENGAGED  :  SetServo(SERVO_POSITION_ENGAGEMENT);LockCam(); StopServo();  /*erial << "process closing state engaged \n"; */ break;
 
     case STATE_BOOT_LOCKED : OutMotor(MOTOR_CAM, 0); /*Serial << "process cl boot mocked\n";*/mode = MODE_IDLE; break;
   }
@@ -355,7 +358,7 @@ void LockCam()
     }
     delay (2);
 
-  } while ( (millis() - start_time) <= 1300);
+  } while ( (millis() - start_time) <= 1400);
 
   Serial << "out on timeout ... STOP!!!! \n";
   OutMotor(MOTOR_CAM, 0);
@@ -811,6 +814,8 @@ void CurrentProtection()
   if (current_pos >= SERVO_POSITION_ENGAGEMENT_INCREASE_CURRENT)
   {
     current_limit += CURRENT_EXTRA_ALLOWANCE_LOCK;
+    //if (mode != MODE_IDLE)
+     // show_current_measure = true;
   }
 
   if (show_current_measure)
@@ -838,11 +843,12 @@ void CurrentProtection()
       {
         Serial << "##### current limit reached " << fabs(average) << " (A) ; current position is " << current_pos << "\n";
         StopServo();
+        show_current_measure = false;
         if (mode == MODE_CLOSING)
           //      mode = MODE_SAFETY_CLOSING;
           //      else
           mode == MODE_IDLE;
-
+        overcurrent_cnt = 0;
         //delay (500);
       }
     }
