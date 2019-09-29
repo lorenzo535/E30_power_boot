@@ -65,17 +65,17 @@ Switch InputRemoteButton = Switch (LOCK_BUTTON_REMOTE, INPUT, LOW, 200, 300, 250
 #define STATE_AT_TOP_END 3
 //////////////////////////////////////
 
-#define SERVO_POSITION_ENGAGEMENT 134
-#define SERVO_POSITION_ENGAGEMENT_INCREASE_CURRENT 118
-#define SERVO_POSITION_TOP_END 72
-#define SERVO_POSITION_UNLOCK 120
+#define SERVO_POSITION_ENGAGEMENT 156
+#define SERVO_POSITION_ENGAGEMENT_INCREASE_CURRENT 142
+#define SERVO_POSITION_TOP_END 78
+#define SERVO_POSITION_UNLOCK 142
 #define POSITION_TOLERANCE 6
 
 #define CAM_COMMAND_GO_TO_LOCK -1
 #define CAM_COMMAND_UNLOCK 1
 #define CURRENT_LIMIT 6 //2.8
 
-#define CURRENT_EXTRA_ALLOWANCE_LOCK 5.0    // <===============================
+#define CURRENT_EXTRA_ALLOWANCE_LOCK 3.0    // <===============================
 #define OVERCURRENT_CONSECUTIVE_STEPS 40
 #define MV_PER_AMP 100
 #define POS_FEEDBACK_LOW_BOUND 1000
@@ -307,7 +307,7 @@ void ProcessClosing ()
     case STATE_AT_TOP_END :
     case STATE_SWINGING :  SetServo(SERVO_POSITION_ENGAGEMENT); /*Serial << "process cl top end , swinging\n";*/  break;
 
-    case STATE_ENGAGED  :  SetServo(SERVO_POSITION_ENGAGEMENT);LockCam(); StopServo();  /*erial << "process closing state engaged \n"; */ break;
+    case STATE_ENGAGED  :  StopServo(); LockCam(); //SetServo(SERVO_POSITION_ENGAGEMENT);LockCam(); StopServo();  /*erial << "process closing state engaged \n"; */ break;
 
     case STATE_BOOT_LOCKED : OutMotor(MOTOR_CAM, 0); /*Serial << "process cl boot mocked\n";*/mode = MODE_IDLE; break;
   }
