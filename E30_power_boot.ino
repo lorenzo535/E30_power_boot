@@ -289,7 +289,7 @@ void ProcessOpening()
   {
     case STATE_BOOT_LOCKED : UnlockCam(); /*Serial << "process op boot locked \n";*/ break;
 
-    case STATE_ENGAGED  :
+    case STATE_ENGAGED  :UnlockCam(); /*Serial << "process op boot locked \n";*/ break;
 
     case STATE_SWINGING :  OutMotor(MOTOR_CAM, 0); SetServo(SERVO_POSITION_TOP_END);/* Serial << "process op swinging\n";*/ break;
 
