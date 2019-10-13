@@ -1,12 +1,12 @@
 //Actual board
-//ARDUINO Leonardo
+//ESP32 Dev board
 
 
-#include <Servo.h>
 #include <Streaming.h>
 #include "Switch.h"
 
-Servo myservo;  // create servo object to control a servo
+#include "myservopid.h"
+
 #include <NewPing.h>
 
 //Variables and constants for ultrasound switch
@@ -14,25 +14,31 @@ unsigned long t1, t2, t3, t4, old_millis, now_millis, time_sig;
 unsigned short cycle;
 int  dist, old_dist;
 bool show_us_distance;
-#define DIST_LOW 29
-#define DIST_HIGH 30
-#define PIN_US_TRIG  A3
-#define PIN_US_ECHO  4
-#define MAX_DISTANCE 50
-NewPing sonar(PIN_US_TRIG, PIN_US_ECHO, MAX_DISTANCE); // NewPing setup of pins and maximum distance.
 
-// Pin defintion on Pro Micro board
-#define PIN_LOCK_SW1 3
-#define PIN_LOCK_SW2 5
-#define PIN_PWM_SERVO 6
-#define PIN_SERVO_FEEDBACK A2
-#define PIN_CURRENT_SENSE A10  //pin 10 on board
 
-#define PIN_INPUT_1  9
-#define PIN_INPUT_2  8
-#define PIN_INPUT_3  7
-#define PIN_INPUT_4  A1
-#define POWER_DRIVES A0
+///////////////////////////////////////////////////
+// Pin defintion on ESP32 board
+
+#define PIN_FREE1   14
+#define PIN_FREE2   12
+#define PIN_FREE3   13
+#define PIN_FREE4   15
+
+
+
+#define ESP32_PIN_RX2 16
+#define ESP32_PIN_TX2 17
+
+#define PIN_LOCK_SW1 ESP32_PIN_RX2
+#define PIN_LOCK_SW2 ESP32_PIN_TX2
+
+#define PIN_CURRENT_SENSE 34  //pin 10 on board
+
+#define PIN_INPUT_1  23
+#define PIN_INPUT_2  2
+#define PIN_INPUT_3  19
+#define PIN_INPUT_4  18
+#define POWER_DRIVES 25
 
 #define LOCK_BUTTON   PIN_INPUT_1
 #define LOCK_BUTTON_REMOTE  PIN_INPUT_2
@@ -44,13 +50,40 @@ NewPing sonar(PIN_US_TRIG, PIN_US_ECHO, MAX_DISTANCE); // NewPing setup of pins 
 Switch InputButton = Switch (LOCK_BUTTON, INPUT, LOW, 200, 300, 250, 10);
 Switch InputRemoteButton = Switch (LOCK_BUTTON_REMOTE, INPUT, LOW, 200, 300, 250, 10);
 
-#define PIN_LED_ERR   4
-#define PIN_LED_BTNS A3
+///////////// Servo PID
+#define PIN_WRITE_TO_MOTOR PIN_FREE2
+#define PIN_READ_FROM_MOTOR PIN_FREE1
+#define PIN_READ_SIGNAL PIN_FREE3
+#define PIN_OUT_3_3 PIN_FREE4
+MyServoPID servoPID (PIN_READ_FROM_MOTOR, PIN_WRITE_TO_MOTOR,PIN_READ_SIGNAL, PIN_OUT_3_3, 10, 0.8, 0.54);
+///////////
 
-#define PIN_DIR_MOTOR_CAM  15
+
+#define MOTOR1_DIR 33
+#define MOTOR1_PWM 32
+#define MOTOR2_PWM 26
+
+#define PIN_DIR_MOTOR_CAM  MOTOR1_DIR
 #define PIN_DIR_MOTOR_UNLOCKER -1
-#define PIN_PWM_MOTOR_CAM 14
-#define PIN_PWM_MOTOR_UNLOCKER 16
+#define PIN_PWM_MOTOR_CAM MOTOR1_PWM
+#define PIN_PWM_MOTOR_UNLOCKER MOTOR2_PWM
+#define CAR_CENTRAL_LOCK_STATE_INPUT D35
+
+#define PIN_I2C_SCL 22
+#define PIN_I2C_SDA 21
+
+#define PIN_US_TRIG  PIN_I2C_SCL
+#define PIN_US_ECHO  PIN_I2C_SDA
+
+//////////////////  END PIN DEFINITION
+
+////// ultrasound measure
+#define DIST_LOW 29
+#define DIST_HIGH 30
+#define MAX_DISTANCE 50
+NewPing sonar(PIN_US_TRIG, PIN_US_ECHO, MAX_DISTANCE); // NewPing setup of pins and maximum distance.
+///
+
 
 ////////////////STATES AND MODES ///////////////
 #define MODE_OPENING  0
@@ -65,11 +98,11 @@ Switch InputRemoteButton = Switch (LOCK_BUTTON_REMOTE, INPUT, LOW, 200, 300, 250
 #define STATE_AT_TOP_END 3
 //////////////////////////////////////
 
-#define SERVO_POSITION_ENGAGEMENT 156
-#define SERVO_POSITION_ENGAGEMENT_INCREASE_CURRENT 142
-#define SERVO_POSITION_TOP_END 78
-#define SERVO_POSITION_UNLOCK 142
-#define POSITION_TOLERANCE 6
+#define SERVO_POSITION_ENGAGEMENT 700
+#define SERVO_POSITION_ENGAGEMENT_INCREASE_CURRENT 950
+#define SERVO_POSITION_TOP_END 1900
+#define SERVO_POSITION_UNLOCK 720
+#define POSITION_TOLERANCE 60
 
 #define CAM_COMMAND_GO_TO_LOCK -1
 #define CAM_COMMAND_UNLOCK 1
@@ -88,7 +121,7 @@ Switch InputRemoteButton = Switch (LOCK_BUTTON_REMOTE, INPUT, LOW, 200, 300, 250
 unsigned short mode, old_mode, mode_when_stopped_was;
 unsigned short state, old_state;
 int pos = 0;    // variable to store the servo position
-int current_pos;
+unsigned short current_pos;
 unsigned short overcurrent_cnt = 0;
 boolean show_current_measure;
 boolean show_position;
@@ -100,21 +133,20 @@ boolean drivers_on;
 boolean old_sw1, old_sw2;
 boolean old_lock_cmd_button, old_lock_cmd_remote;
 boolean inhibit_first;
-boolean servo_stopped;
+boolean servo_stopped, manual_servo;
 #define ANALOG_AVERAGING_STEPS  10
 float raw_current[ANALOG_AVERAGING_STEPS];
-float raw_position[ANALOG_AVERAGING_STEPS];
 unsigned long motion_started;
 short unsigned int current_av_steps, position_av_steps;
 
-
+char out_string[6];
 
 void setup() {
 
+  Serial.begin(9600);
   pinMode(PIN_LOCK_SW1, INPUT);
   pinMode(PIN_LOCK_SW2, INPUT);
-
-  pinMode(PIN_SERVO_FEEDBACK, INPUT);
+  
   pinMode(PIN_CURRENT_SENSE, INPUT);
 
   pinMode(PIN_INPUT_1, INPUT);
@@ -122,8 +154,6 @@ void setup() {
   pinMode(PIN_INPUT_3, INPUT);
   pinMode(PIN_INPUT_4, INPUT);
 
-  pinMode(PIN_LED_ERR, OUTPUT);
-  pinMode(PIN_LED_BTNS, OUTPUT);
 
   pinMode(PIN_DIR_MOTOR_CAM, OUTPUT);
   pinMode(PIN_PWM_MOTOR_CAM, OUTPUT);
@@ -146,7 +176,6 @@ void setup() {
   for (j = 0; j < ANALOG_AVERAGING_STEPS; j++)
   {
     raw_current [j] = 0;
-    raw_position [j] = 0;
   }
 
   EvaluateState();
@@ -157,6 +186,7 @@ void setup() {
   InputRemoteButton.poll();
   inhibit_first = 1;
   servo_stopped = true;
+  manual_servo = false;
   mode_when_stopped_was = MODE_IDLE;
   drivers_on = true;
   PowerDrivesOff();
@@ -175,20 +205,14 @@ void setup() {
 
 void StopServo()
 {
-  if (servo_stopped)
+    manual_servo = false;
+    if (servo_stopped)
     return;
   int i;
   servo_stopped = true;
-  pos = ScalePosition();
-
-  for (i = 0; i < 3; i++)
-  {
-    myservo.write(pos);
-    delay (100);
-  }
-
+  servoPID.StopServo();
+  
   mode = MODE_IDLE;
-
 
 }
 
@@ -212,6 +236,8 @@ void loop() {
   InputRemoteButton.poll();
 
   //TestServo();
+  if (!servo_stopped)
+    servoPID.Compute(out_string);    
 
   if (show_mode)
     DisplayModeAndState();
@@ -251,10 +277,10 @@ void loop() {
 
         else
         {
-          StopServo();
+          if (!manual_servo)
+            StopServo();
           OutMotor(MOTOR_CAM, 0);
-          OutMotor(MOTOR_UNLOCKER, 0);
-          myservo.detach();
+          OutMotor(MOTOR_UNLOCKER, 0);         
           PowerDrivesOff();
         }
         break;
@@ -318,7 +344,7 @@ void ProcessClosing ()
 
 void UnlockCam()
 {
-  myservo.write(SERVO_POSITION_UNLOCK);
+  SetServo(SERVO_POSITION_UNLOCK);
   OutMotor(MOTOR_UNLOCKER, 1);
   delay (500);
   OutMotor(MOTOR_UNLOCKER, 0);
@@ -567,24 +593,6 @@ boolean isCarMoving()
   return false;
 }
 
-void TestServo()
-{
-
-  if (power)
-    PowerDrivesOn();
-  else
-    PowerDrivesOff();
-  return;
-
-
-  if (pos <= 0)
-    pos = 0;
-  if  (pos >= 180)
-    pos = 180;
-  if (!off_servo)
-    myservo.write(pos);
-
-}
 
 
 void SetServo(int position_target)
@@ -599,17 +607,16 @@ void SetServo(int position_target)
   current_target = position_target;
 
 
-  if (!myservo.attached())
-    myservo.attach(PIN_PWM_SERVO);
-  myservo.write(position_target);
+  servoPID.SetPosition(position_target);
   servo_stopped = false;
+  
 }
 
 void EvaluateState()
 {
   static short count_debounce = 0;
   //Read Servo feedback
-  current_pos = ScalePosition();
+  current_pos = servoPID.GetPosition();
   if (show_position)
     Serial << "Current position " << current_pos << " \n";
 
@@ -680,110 +687,87 @@ void EvaluateState()
 
 
 
-unsigned int ScalePosition ()
-{
-  //raw reading 1022 = top = 180°
-  // raw reading 980 = bottom = 0°
-  static int pos_average_steps = 0;
-  int j = 0;
-  bool displayout = false;
-
-  //1024 - anain
-
-  float scaledpos = analogRead (PIN_SERVO_FEEDBACK) / 1024.0 * 5.0; //in volts
-
-  raw_position [pos_average_steps] = scaledpos;
-  pos_average_steps++;
-
-  if (pos_average_steps >= ANALOG_AVERAGING_STEPS)
-  {
-    pos_average_steps = 0;
-    displayout = true;
-  }
-
-  //compute average
-  float average = 0;
-  for (j = 0; j < ANALOG_AVERAGING_STEPS; j++)
-  {
-    average = average + raw_position [j];
-  }
-  average = average / ANALOG_AVERAGING_STEPS;
-
-  unsigned int output;
-  float x = average;
-  //polynomial approximation in use with 10 turn potentiometer
-  average = 88.1593538351 * x * x * x * x - 869.9926535361 * x * x * x + 3208.9184567625 * x * x - 5385.4931352597 * x + 3698.1106094017;
-  output = (unsigned int) (average );
-  //if (displayout) Serial <<" Ana reading " << scaledpos <<"average "<<  average << "  pos corresponds to " <<output<< "\n";
-  return output;
-
-
-}
 
 void ReadKeyboardCmds()
 {
 
+  int nochars = 0, value,i;
+ char rx_byte;
+ String rx_string= "";
+
   //Check for manual commands
   if (Serial.available() > 0)
   {
-    Serial << "keyboard in \n";
+    nochars = Serial.available();
+    Serial << "keyboard in , number of characters:" << nochars <<"\n";
 
-    char rx_byte = Serial.read();       // get the character
-
-
-    // ?
-    if (rx_byte == '?')
+    if (nochars ==1)
     {
-      Serial << "B,b = bottom, T,t = top ; P,p = +5, M,m = -5;  C,c = current\n" ;
-    }
+      rx_byte = Serial.read();
+      if (rx_byte == '?')
+      {
+        Serial << "B,b = bottom, T,t = top ; P,p = +5, M,m = -5;  C,c = current\n" ;
+      }
+  
+  
+      switch (rx_byte)
+      {
+        case 'M':
+        case 'm': show_mode = !show_mode ; break;
+        case 'U':
+        case 'u': Serial << "Unlock cam\n"; PowerDrivesOn(); UnlockCam(); PowerDrivesOff(); break;
+        case 'L':
+        case 'l': Serial << "Lock cam\n"; PowerDrivesOn(); LockCam(); PowerDrivesOff(); break;
+        case 'P':
+        case 'p':  break;
+        case 'T':
+        case 't': Serial << "go to top end \n" ; servoPID.SetPosition(SERVO_POSITION_ENGAGEMENT);break;
+        case 'B':
+        case 'b': Serial << "go to bottom end \n" ; servoPID.SetPosition(SERVO_POSITION_TOP_END); break;                              
+        case 'D':
+        case 'd': Serial << "show US distance \n"; show_us_distance = ! show_us_distance; break;
+        case 'C':
+        case 'c': Serial << "show current \n"; show_current_measure = ! show_current_measure; break;
+        case 'Z':
+        case 'z': Serial << "show position \n"; show_position = ! show_position; break;
+        case 'S':
+        case 's' : Serial << " STOP STOP at " << servoPID.GetPosition()  << "\n"; StopServo(); break;
+        case 'a':
+        case 'A' : Serial << " cam motor positive \n"; OutMotor (MOTOR_CAM, 0.5); delay (1000); OutMotor (MOTOR_CAM, 0); break;
+        case 'q':
+        case 'Q' : Serial << " cam motor negative \n"; OutMotor (MOTOR_CAM, -0.5); delay (1000); OutMotor (MOTOR_CAM, 0); break;
+        case 'w':
+        case 'W' : Serial << " unlock motor  \n"; OutMotor (MOTOR_UNLOCKER, 0.5); delay (1000); OutMotor (MOTOR_UNLOCKER, 0); break;
+        case '1' : mode = MODE_CLOSING; Serial << "closing keyboard command \n"; break;
+        case '2' : mode = MODE_OPENING; Serial << "opening keyboard command \n"; break;
+        case '3' : show_switches = !show_switches; break;
+        case  'n':
+        case 'N':
+          Serial << "power " << (power ? "ON" : "OFF") << "\n"; power = !power; break;           
+      }  
+    }  // Read 1 character
 
-
-    switch (rx_byte)
+    else if (nochars ==4)
     {
-      case 'M':
-      case 'm': show_mode = !show_mode ; break;
-      case 'U':
-      case 'u': Serial << "Unlock cam\n"; PowerDrivesOn(); UnlockCam(); PowerDrivesOff(); break;
-      case 'L':
-      case 'l': Serial << "Lock cam\n"; PowerDrivesOn(); LockCam(); PowerDrivesOff(); break;
-      case 'P':
-      case 'p': Serial << "+5 \n" ; pos = pos + 5; break;
-      case 'T':
-      case 't': Serial << "go to top end \n" ; pos = 180; break;
-      case 'B':
-      case 'b': Serial << "go to bottom end \n" ; pos = 0; break;
-      case 'D':
-      case 'd': Serial << "show US distance \n"; show_us_distance = ! show_us_distance; break;
-      case 'C':
-      case 'c': Serial << "show current \n"; show_current_measure = ! show_current_measure; break;
-      case 'Z':
-      case 'z': Serial << "show position \n"; show_position = ! show_position; break;
-      case 'S':
-      case 's' : Serial << " STOP STOP at " << ScalePosition() << "\n"; StopServo(); break;
-      case 'a':
-      case 'A' : Serial << " cam motor positive \n"; OutMotor (MOTOR_CAM, 0.5); delay (1000); OutMotor (MOTOR_CAM, 0); break;
-      case 'q':
-      case 'Q' : Serial << " cam motor negative \n"; OutMotor (MOTOR_CAM, -0.5); delay (1000); OutMotor (MOTOR_CAM, 0); break;
-      case 'w':
-      case 'W' : Serial << " unlock motor  \n"; OutMotor (MOTOR_UNLOCKER, 0.5); delay (1000); OutMotor (MOTOR_UNLOCKER, 0); break;
-      case '1' : mode = MODE_CLOSING; Serial << "closing keyboard command \n"; break;
-      case '2' : mode = MODE_OPENING; Serial << "opening keyboard command \n"; break;
-      case '3' : show_switches = !show_switches; break;
-      case  'n':
-      case 'N':
-        Serial << "power " << (power ? "ON" : "OFF") << "\n"; power = !power; break;
+      for (i = 0; i < nochars; i++)
+      {
+        rx_byte = Serial.read();
+        rx_string += rx_byte;
+      }
+       value = atoi(rx_string.c_str());
+       if ((value > 0) && (value < 4096))
+       {
+        Serial << " %%%%%%%  Received value : " <<value <<"\n";
+        manual_servo = true;
+        SetServo (value);
+       }
+       }
+            
+     while (Serial.available()) Serial.read();
+     
+  } // Serial available
 
-      case 'X':
-      case 'x' : off_servo = !off_servo;
-        if (off_servo) myservo.detach();
-        else myservo.attach(9);
-        Serial << " SERVO AXIS IS " <<  (off_servo ? "OFF" : "ON") << "\n";  break;
-
-
-    }
-
-  }
-}
+} //end function  
 
 
 
@@ -864,9 +848,9 @@ float ADCValueToCurrent (long int adc_in)
 {
 
   float temp = adc_in;
-  float mv = (temp / 1023.0) * 5000.0;
+  float mv = (temp / 4096.0) * 3300;
 
-  return ((mv - 2500) / MV_PER_AMP);
+  return ((mv - 1650) / MV_PER_AMP);
 
 }
 
