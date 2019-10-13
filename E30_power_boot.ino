@@ -1,12 +1,18 @@
 //Actual board
 //ESP32 Dev board
 
-/////////////////////////////////////////////////////////////////
-#define SERVO_POSITION_ENGAGEMENT 900
-#define SERVO_POSITION_ENGAGEMENT_INCREASE_CURRENT 950
-#define SERVO_POSITION_TOP_END 2200
-#define SERVO_POSITION_UNLOCK 920
+//////////////////MOST IMPORTANT SETTINGS////////////////////////////////////
+#define SERVO_POSITION_ENGAGEMENT 575
+#define SERVO_POSITION_ENGAGEMENT_INCREASE_CURRENT 850
+#define SERVO_POSITION_TOP_END 2100
+#define SERVO_POSITION_UNLOCK 750
 #define POSITION_TOLERANCE 60
+
+#define CURRENT_LIMIT 3.8 //2.8
+#define CURRENT_EXTRA_ALLOWANCE_LOCK 2.5    // <===============================
+#define OVERCURRENT_CONSECUTIVE_STEPS 10
+
+
 /////////////////////////////////////////////////////////////////
 
 #include <Streaming.h>
@@ -62,7 +68,7 @@ Switch InputRemoteButton = Switch (LOCK_BUTTON_REMOTE, INPUT, LOW, 200, 300, 250
 #define PIN_READ_FROM_MOTOR PIN_FREE1
 #define PIN_READ_SIGNAL PIN_FREE3
 #define PIN_OUT_3_3 PIN_FREE4
-MyServoPID servoPID (PIN_READ_FROM_MOTOR, PIN_WRITE_TO_MOTOR,PIN_READ_SIGNAL, PIN_OUT_3_3, 10, 0.8, 0.54);
+MyServoPID servoPID (PIN_READ_FROM_MOTOR, PIN_WRITE_TO_MOTOR,PIN_READ_SIGNAL, PIN_OUT_3_3, 12, 1.2, 0.54);
 ///////////
 
 
@@ -108,10 +114,6 @@ NewPing sonar(PIN_US_TRIG, PIN_US_ECHO, MAX_DISTANCE); // NewPing setup of pins 
 
 #define CAM_COMMAND_GO_TO_LOCK -1
 #define CAM_COMMAND_UNLOCK 1
-#define CURRENT_LIMIT 6 //2.8
-
-#define CURRENT_EXTRA_ALLOWANCE_LOCK 3.0    // <===============================
-#define OVERCURRENT_CONSECUTIVE_STEPS 40
 #define MV_PER_AMP 100
 #define POS_FEEDBACK_LOW_BOUND 1000
 #define POS_FEEDBACK_HIGH_BOUND 2000
@@ -337,7 +339,7 @@ void ProcessClosing ()
 
     case STATE_ENGAGED  :  StopServo(); LockCam(); //SetServo(SERVO_POSITION_ENGAGEMENT);LockCam(); StopServo();  /*erial << "process closing state engaged \n"; */ break;
 
-    case STATE_BOOT_LOCKED : OutMotor(MOTOR_CAM, 0); /*Serial << "process cl boot mocked\n";*/mode = MODE_IDLE; break;
+    case STATE_BOOT_LOCKED : OutMotor(MOTOR_CAM, 0); SetServo(SERVO_POSITION_UNLOCK);/*Serial << "process cl boot mocked\n";*/mode = MODE_IDLE; break;
   }
 
 }
@@ -633,20 +635,20 @@ void EvaluateState()
   if (sw1)
   {
     state = STATE_ENGAGED;
-    Serial << "Engaged ! \n";
+    //Serial << "Engaged ! \n";
   }
 
 
   if (sw2)
   {
     state = STATE_BOOT_LOCKED;
-    Serial << "Boot locked ! \n";
+    //Serial << "Boot locked ! \n";
   }
 
 
   if (!sw1 && !sw2)
   {
-    if ((abs (current_pos - SERVO_POSITION_TOP_END) <=  POSITION_TOLERANCE - 4)  || (current_pos >= (SERVO_POSITION_TOP_END)))
+    if ((abs (current_pos - SERVO_POSITION_TOP_END) <=  POSITION_TOLERANCE - (mode == MODE_OPENING ? 40 : 0))  || (current_pos >= (SERVO_POSITION_TOP_END)))
     {
 
       //Serial << "xount = " << count_debounce << "position = " << current_pos << "\n";
@@ -781,7 +783,8 @@ void CurrentProtection()
   int j;
   static short int skip = 0;
   int anain = analogRead(PIN_CURRENT_SENSE);
-  raw_current [current_av_steps] = ADCValueToCurrent(anain) ;
+  
+  raw_current [current_av_steps] = ADCValueToCurrent(anain); 
   current_av_steps++;
 
   if (current_av_steps >= ANALOG_AVERAGING_STEPS)
@@ -797,7 +800,7 @@ void CurrentProtection()
 
   float current_limit = CURRENT_LIMIT;
 
-  if (current_pos >= SERVO_POSITION_ENGAGEMENT_INCREASE_CURRENT)
+  if (current_pos <= SERVO_POSITION_ENGAGEMENT_INCREASE_CURRENT)
   {
     current_limit += CURRENT_EXTRA_ALLOWANCE_LOCK;
     //if (mode != MODE_IDLE)
@@ -846,10 +849,12 @@ void CurrentProtection()
 }
 
 
-float ADCValueToCurrent (long int adc_in)
+float ADCValueToCurrent ( int adc_in)
 {
 
-  float temp = adc_in;
+  if (0)//show_current_measure)
+    Serial << "Raw ADC current is "<< adc_in <<"\n";
+  float temp = adc_in - 900;
   float mv = (temp / 4096.0) * 3300;
 
   return ((mv - 1650) / MV_PER_AMP);
