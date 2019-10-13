@@ -1,6 +1,13 @@
 //Actual board
 //ESP32 Dev board
 
+/////////////////////////////////////////////////////////////////
+#define SERVO_POSITION_ENGAGEMENT 900
+#define SERVO_POSITION_ENGAGEMENT_INCREASE_CURRENT 950
+#define SERVO_POSITION_TOP_END 2200
+#define SERVO_POSITION_UNLOCK 920
+#define POSITION_TOLERANCE 60
+/////////////////////////////////////////////////////////////////
 
 #include <Streaming.h>
 #include "Switch.h"
@@ -98,11 +105,6 @@ NewPing sonar(PIN_US_TRIG, PIN_US_ECHO, MAX_DISTANCE); // NewPing setup of pins 
 #define STATE_AT_TOP_END 3
 //////////////////////////////////////
 
-#define SERVO_POSITION_ENGAGEMENT 700
-#define SERVO_POSITION_ENGAGEMENT_INCREASE_CURRENT 950
-#define SERVO_POSITION_TOP_END 1900
-#define SERVO_POSITION_UNLOCK 720
-#define POSITION_TOLERANCE 60
 
 #define CAM_COMMAND_GO_TO_LOCK -1
 #define CAM_COMMAND_UNLOCK 1
@@ -631,20 +633,20 @@ void EvaluateState()
   if (sw1)
   {
     state = STATE_ENGAGED;
-    //Serial << "Engaged ! \n";
+    Serial << "Engaged ! \n";
   }
 
 
   if (sw2)
   {
     state = STATE_BOOT_LOCKED;
-    //Serial << "Boot locked ! \n";
+    Serial << "Boot locked ! \n";
   }
 
 
   if (!sw1 && !sw2)
   {
-    if ((abs (current_pos - SERVO_POSITION_TOP_END) <=  POSITION_TOLERANCE - 4)  || (current_pos <= (SERVO_POSITION_TOP_END)))
+    if ((abs (current_pos - SERVO_POSITION_TOP_END) <=  POSITION_TOLERANCE - 4)  || (current_pos >= (SERVO_POSITION_TOP_END)))
     {
 
       //Serial << "xount = " << count_debounce << "position = " << current_pos << "\n";

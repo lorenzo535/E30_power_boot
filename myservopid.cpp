@@ -9,7 +9,7 @@
 #include <Streaming.h>
 #endif 
 
-MyServoPID::MyServoPID(unsigned short RXPIN, unsigned short TXPIN, unsigned short signal_pin, unsigned short PIN_3_3, double Kp, double Ki, double Kd ) : m_PID( &m_pid_measure, &m_pid_output, &m_setpoint, Kp, Ki, Kd,P_ON_E, REVERSE,200)
+MyServoPID::MyServoPID(unsigned short RXPIN, unsigned short TXPIN, unsigned short signal_pin, unsigned short PIN_3_3, double Kp, double Ki, double Kd ) : m_PID( &m_pid_measure, &m_pid_output, &m_setpoint, Kp, Ki, Kd,P_ON_E, REVERSE,400)
 {
     m_softserial.begin(9600, RXPIN,TXPIN, SWSERIAL_8N1, false, 256);
     StopServo();
@@ -27,11 +27,10 @@ MyServoPID::MyServoPID(unsigned short RXPIN, unsigned short TXPIN, unsigned shor
 
     digitalWrite (PIN_3_3, HIGH);
     int j;
-    for (j = 0; j < ANALOG_AVERAGING_STEPS; j++)    
+    for (j = 0; j < ANALOG_AVERAGING_STEPS; j++)
+    {
       m_raw_signal [j] = 0;
-    for (j = 0; j < OUTPUT_AVERAGING_STEPS; j++)    
-      m_raw_output [j] = 0;
-    
+    }
        
 
 }
@@ -93,31 +92,29 @@ unsigned short MyServoPID::ReadFilteredPosition()
 
 }
 
-
 double MyServoPID::FilterOutput(double unfiltered)
 {
-   return unfiltered;
+ 
   static unsigned short average_steps = 0;
   
   m_raw_output [average_steps] =  unfiltered;
   average_steps++;
 
-  if (average_steps >= ANALOG_AVERAGING_STEPS)
+  if (average_steps >= OUTPUT_AVERAGING_STEPS)
     average_steps = 0;
 
   //compute average
-  int average = 0;
+  double average = 0.0;
   int j;
   for (j = 0; j < OUTPUT_AVERAGING_STEPS; j++)
   {
     average = average + m_raw_output [j];
   }
-  average = average / ANALOG_AVERAGING_STEPS;
+  average = average / OUTPUT_AVERAGING_STEPS;
 
   return  average;
 
 }
-
 
 void MyServoPID::Compute(char* output_string)
 {
@@ -133,7 +130,7 @@ void MyServoPID::Compute(char* output_string)
 
   // Serial << "output is : " << m_pid_output <<" \n";
     unsigned short ushort_speed_cmd = (unsigned short) fabs (FilterOutput(m_pid_output));
-    if (m_pid_output >= 0)
+    if (m_pid_output <= 0)
         sprintf (output_string, "F%04d",ushort_speed_cmd );
     else
         sprintf (output_string, "R%04d",ushort_speed_cmd );

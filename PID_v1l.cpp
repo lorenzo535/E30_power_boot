@@ -70,17 +70,7 @@ bool PID::Compute()
       double input = *myInput;
       double error = *mySetpoint - input;
       
-      if (m_bang_bang_error_limit != -9999)
-      if (fabs(error) >= m_bang_bang_error_limit)
-      {
-        outputSum = 0;
-        if (error >=0)
-        *myOutput = outMin;
-        else
-        *myOutput = outMax;
-        return true;
-          
-      }
+      
       
       double dInput = (input - lastInput);
       outputSum+= (ki * error);
@@ -107,6 +97,19 @@ bool PID::Compute()
       /*Remember some variables for next time*/
       lastInput = input;
       lastTime = now;
+
+      if (m_bang_bang_error_limit != -9999)
+      if (fabs(error) >= m_bang_bang_error_limit)
+      {
+        outputSum = 0;
+        if (error >=0)
+        *myOutput = outMin;
+        else
+        *myOutput = outMax;
+        return true;
+          
+      }
+      
 	    return true;
    }
    else return false;

@@ -3,7 +3,7 @@
 
 #include <SoftwareSerial.h>
 #define ANALOG_AVERAGING_STEPS 10
-#define OUTPUT_AVERAGING_STEPS 10
+#define OUTPUT_AVERAGING_STEPS 3
 #include "PID_v1l.h"
 
 class MyServoPID
@@ -31,7 +31,6 @@ private:
     unsigned short m_signal_pin;
     unsigned short m_raw_signal[ANALOG_AVERAGING_STEPS];
     double m_raw_output[OUTPUT_AVERAGING_STEPS];
-    
 
 
 };
