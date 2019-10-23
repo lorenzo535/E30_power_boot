@@ -5,8 +5,11 @@
 #define SERVO_POSITION_ENGAGEMENT 575
 #define SERVO_POSITION_ENGAGEMENT_INCREASE_CURRENT 850
 #define SERVO_POSITION_TOP_END 2100
-#define SERVO_POSITION_UNLOCK 750
+#define SERVO_POSITION_UNLOCK 800
 #define POSITION_TOLERANCE 60
+
+#define POSITION_RE_TENSION_FOR_OPENING 680 
+#define POSITION_OK_FOR_OPENING 720 
 
 #define CURRENT_LIMIT 3.8 //2.8
 #define CURRENT_EXTRA_ALLOWANCE_LOCK 2.5    // <===============================
@@ -140,7 +143,7 @@ boolean inhibit_first;
 boolean servo_stopped, manual_servo;
 #define ANALOG_AVERAGING_STEPS  10
 float raw_current[ANALOG_AVERAGING_STEPS];
-unsigned long motion_started;
+unsigned long motion_started, boot_locked_1;
 short unsigned int current_av_steps, position_av_steps;
 
 char out_string[6];
@@ -175,7 +178,6 @@ void setup() {
   mode = MODE_IDLE;
   show_switches = 0;
   show_position = 0;
-
   int j;
   for (j = 0; j < ANALOG_AVERAGING_STEPS; j++)
   {
@@ -204,6 +206,8 @@ void setup() {
   dist = 20;
   show_us_distance = false;
   old_millis = t1;
+  boot_locked_1 = t1;
+
 
 }
 
@@ -216,7 +220,7 @@ void StopServo()
   servo_stopped = true;
   servoPID.StopServo();
   
-  mode = MODE_IDLE;
+  //mode = MODE_IDLE;
 
 }
 
@@ -317,7 +321,9 @@ void ProcessOpening()
 {
   switch (state)
   {
-    case STATE_BOOT_LOCKED : UnlockCam(); /*Serial << "process op boot locked \n";*/ break;
+    case STATE_BOOT_LOCKED : SetServo(POSITION_RE_TENSION_FOR_OPENING); if (current_pos <= POSITION_OK_FOR_OPENING){
+                                                  UnlockCam();} /*Serial << "process op boot locked \n";*/ break;
+    
 
     case STATE_ENGAGED  :UnlockCam(); /*Serial << "process op boot locked \n";*/ break;
 
@@ -337,9 +343,15 @@ void ProcessClosing ()
     case STATE_AT_TOP_END :
     case STATE_SWINGING :  SetServo(SERVO_POSITION_ENGAGEMENT); /*Serial << "process cl top end , swinging\n";*/  break;
 
-    case STATE_ENGAGED  :  StopServo(); LockCam(); //SetServo(SERVO_POSITION_ENGAGEMENT);LockCam(); StopServo();  /*erial << "process closing state engaged \n"; */ break;
+    case STATE_ENGAGED  :  StopServo(); LockCam(); boot_locked_1 = millis(); break;//SetServo(SERVO_POSITION_ENGAGEMENT);LockCam(); StopServo();  /*erial << "process closing state engaged \n"; */ break;
 
-    case STATE_BOOT_LOCKED : OutMotor(MOTOR_CAM, 0); SetServo(SERVO_POSITION_UNLOCK);/*Serial << "process cl boot mocked\n";*/mode = MODE_IDLE; break;
+    case STATE_BOOT_LOCKED: OutMotor(MOTOR_CAM, 0); SetServo(SERVO_POSITION_UNLOCK); 
+                                    if  ((millis() - boot_locked_1) >= 3000) {
+                                      StopServo(); 
+                                      Serial << "process cl boot locked\n";
+                                      mode = MODE_IDLE;
+                                 }
+                                 break;
   }
 
 }
@@ -348,7 +360,7 @@ void ProcessClosing ()
 
 void UnlockCam()
 {
-  SetServo(SERVO_POSITION_UNLOCK);
+    
   OutMotor(MOTOR_UNLOCKER, 1);
   delay (500);
   OutMotor(MOTOR_UNLOCKER, 0);
@@ -420,6 +432,7 @@ void DisplayModeAndState()
   Serial << "Current state: " ;
   switch (state)
   {
+    
     case STATE_BOOT_LOCKED : Serial << "BOOT LOCKED \n"; break;
     case STATE_ENGAGED  : Serial << "BOOT ENGAGED \n"; break;
     case STATE_SWINGING :  Serial << "SWINGING \n"; break;
@@ -745,6 +758,7 @@ void ReadKeyboardCmds()
         case '1' : mode = MODE_CLOSING; Serial << "closing keyboard command \n"; break;
         case '2' : mode = MODE_OPENING; Serial << "opening keyboard command \n"; break;
         case '3' : show_switches = !show_switches; break;
+        
         case  'n':
         case 'N':
           Serial << "power " << (power ? "ON" : "OFF") << "\n"; power = !power; break;           
