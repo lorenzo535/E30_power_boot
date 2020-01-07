@@ -321,8 +321,7 @@ void ProcessOpening()
 {
   switch (state)
   {
-    case STATE_BOOT_LOCKED : SetServo(POSITION_RE_TENSION_FOR_OPENING); if (current_pos <= POSITION_OK_FOR_OPENING){
-                                                  UnlockCam();} /*Serial << "process op boot locked \n";*/ break;
+    case STATE_BOOT_LOCKED :  UnlockCam(); break;
     
 
     case STATE_ENGAGED  :UnlockCam(); /*Serial << "process op boot locked \n";*/ break;
