@@ -25,6 +25,15 @@
 
 #include <NewPing.h>
 
+#include <ESP32Servo.h>
+
+////////////// SERVO UNCLICKER
+Servo servo_unstucker;  // create servo object to control a servo
+#define UNCLICKER_REST 15
+#define UNCLICKER_ENGAGE 100
+//////////////////////////////////////////////////////////////
+
+
 //Variables and constants for ultrasound switch
 unsigned long t1, t2, t3, t4, old_millis, now_millis, time_sig;
 unsigned short cycle;
@@ -40,7 +49,7 @@ bool show_us_distance;
 #define PIN_FREE3   13
 #define PIN_FREE4   15
 
-
+#define PIN_SERVO_UNSTUCKER PIN_FREE1
 
 #define ESP32_PIN_RX2 16
 #define ESP32_PIN_TX2 17
@@ -170,6 +179,10 @@ void setup() {
   pinMode (PIN_US_TRIG, OUTPUT);
   pinMode (PIN_US_ECHO, INPUT);
 
+  servo_unstucker.setPeriodHertz(50);    // standard 50 hz servo 
+  servo_unstucker.attach(PIN_SERVO_UNSTUCKER, 1000, 2000);  // attaches the servo on pin 9 to the servo object
+  servo_unstucker.write(UNCLICKER_REST); 
+
   StopServo();
   old_sw1 = 0;
   old_sw2 = 0;
@@ -224,7 +237,13 @@ void StopServo()
 
 }
 
+void stuckrelease()
+{
+  servo_unstucker.write(UNCLICKER_ENGAGE);
+  delay(1000);
+  servo_unstucker.write(UNCLICKER_REST); 
 
+}
 
 void loop() {
 
@@ -326,7 +345,7 @@ void ProcessOpening()
 
     case STATE_ENGAGED  :UnlockCam(); /*Serial << "process op boot locked \n";*/ break;
 
-    case STATE_SWINGING :  OutMotor(MOTOR_CAM, 0); SetServo(SERVO_POSITION_TOP_END);/* Serial << "process op swinging\n";*/ break;
+    case STATE_SWINGING :  OutMotor(MOTOR_CAM, 0); SetServo(SERVO_POSITION_TOP_END); stuckrelease();/* Serial << "process op swinging\n";*/ break;
 
     case STATE_AT_TOP_END : StopServo(); Serial << "top end\n"; mode = MODE_IDLE; break;
 
