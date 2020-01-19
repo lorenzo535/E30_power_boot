@@ -2,16 +2,16 @@
 //ESP32 Dev board
 
 //////////////////MOST IMPORTANT SETTINGS////////////////////////////////////
-#define SERVO_POSITION_ENGAGEMENT 575
+#define SERVO_POSITION_ENGAGEMENT 565
 #define SERVO_POSITION_ENGAGEMENT_INCREASE_CURRENT 850
-#define SERVO_POSITION_TOP_END 2100
+#define SERVO_POSITION_TOP_END 2050
 #define SERVO_POSITION_UNLOCK 800
 #define POSITION_TOLERANCE 60
 
 #define POSITION_RE_TENSION_FOR_OPENING 680 
 #define POSITION_OK_FOR_OPENING 720 
 
-#define CURRENT_LIMIT 3.8 //2.8
+#define CURRENT_LIMIT 4.0 //2.8
 #define CURRENT_EXTRA_ALLOWANCE_LOCK 2.5    // <===============================
 #define OVERCURRENT_CONSECUTIVE_STEPS 10
 
@@ -29,8 +29,9 @@
 
 ////////////// SERVO UNCLICKER
 Servo servo_unstucker;  // create servo object to control a servo
-#define UNCLICKER_REST 15
-#define UNCLICKER_ENGAGE 100
+#define UNCLICKER_REST 100
+#define UNCLICKER_ENGAGE 0
+#define PIN_SERVO_PWM 5
 //////////////////////////////////////////////////////////////
 
 
@@ -49,7 +50,7 @@ bool show_us_distance;
 #define PIN_FREE3   13
 #define PIN_FREE4   15
 
-#define PIN_SERVO_UNSTUCKER PIN_FREE1
+#define PIN_SERVO_UNSTUCKER PIN_SERVO_PWM
 
 #define ESP32_PIN_RX2 16
 #define ESP32_PIN_TX2 17
@@ -80,7 +81,7 @@ Switch InputRemoteButton = Switch (LOCK_BUTTON_REMOTE, INPUT, LOW, 200, 300, 250
 #define PIN_READ_FROM_MOTOR PIN_FREE1
 #define PIN_READ_SIGNAL PIN_FREE3
 #define PIN_OUT_3_3 PIN_FREE4
-MyServoPID servoPID (PIN_READ_FROM_MOTOR, PIN_WRITE_TO_MOTOR,PIN_READ_SIGNAL, PIN_OUT_3_3, 12, 1.2, 0.54);
+MyServoPID servoPID (PIN_READ_FROM_MOTOR, PIN_WRITE_TO_MOTOR,PIN_READ_SIGNAL, PIN_OUT_3_3, 15, 1.2, 0.54);
 ///////////
 
 
@@ -180,7 +181,7 @@ void setup() {
   pinMode (PIN_US_ECHO, INPUT);
 
   servo_unstucker.setPeriodHertz(50);    // standard 50 hz servo 
-  servo_unstucker.attach(PIN_SERVO_UNSTUCKER, 1000, 2000);  // attaches the servo on pin 9 to the servo object
+  servo_unstucker.attach(PIN_SERVO_UNSTUCKER, 500, 2000);  // attaches the servo on pin 9 to the servo object
   servo_unstucker.write(UNCLICKER_REST); 
 
   StopServo();
@@ -239,6 +240,7 @@ void StopServo()
 
 void stuckrelease()
 {
+  //return;
   servo_unstucker.write(UNCLICKER_ENGAGE);
   delay(1000);
   servo_unstucker.write(UNCLICKER_REST); 
@@ -246,7 +248,6 @@ void stuckrelease()
 }
 
 void loop() {
-
 
 //Serial << digitalRead (PIN_INPUT_1) << "  " << digitalRead (PIN_INPUT_2)<< digitalRead (PIN_INPUT_3) << "  " << digitalRead (PIN_INPUT_4) <<"\n";
  // delay(200);
@@ -338,14 +339,24 @@ void PowerDrivesOff()
 }
 void ProcessOpening()
 {
+  static bool unstuck_once = false;
+  
   switch (state)
   {
-    case STATE_BOOT_LOCKED :  UnlockCam(); break;
+    case STATE_BOOT_LOCKED :  UnlockCam();unstuck_once = false; break;
     
 
-    case STATE_ENGAGED  :UnlockCam(); /*Serial << "process op boot locked \n";*/ break;
+    case STATE_ENGAGED  :UnlockCam(); unstuck_once = false; /*Serial << "process op boot locked \n";*/ break;
 
-    case STATE_SWINGING :  OutMotor(MOTOR_CAM, 0); SetServo(SERVO_POSITION_TOP_END); stuckrelease();/* Serial << "process op swinging\n";*/ break;
+    case STATE_SWINGING :  OutMotor(MOTOR_CAM, 0); 
+                           SetServo(SERVO_POSITION_TOP_END); 
+                           if ((!unstuck_once)&&(current_pos > 800)) 
+                            {
+                              Serial << "unstuck once \n";
+                                stuckrelease();
+                                unstuck_once = true;
+                            }
+                            /* Serial << "process op swinging\n";*/ break;
 
     case STATE_AT_TOP_END : StopServo(); Serial << "top end\n"; mode = MODE_IDLE; break;
 

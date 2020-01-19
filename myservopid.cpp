@@ -23,9 +23,10 @@ MyServoPID::MyServoPID(unsigned short RXPIN, unsigned short TXPIN, unsigned shor
 
     m_signal_pin = signal_pin;
     pinMode (m_signal_pin, INPUT);
+    
     pinMode (PIN_3_3, OUTPUT);
-
     digitalWrite (PIN_3_3, HIGH);
+    
     int j;
     for (j = 0; j < ANALOG_AVERAGING_STEPS; j++)
     {
