@@ -1,17 +1,18 @@
 //Actual board
 //ESP32 Dev board
+// use ESPSoftwareSerial 5.3.3 and ESP32 core v 1.0.3 to be sure
 
 //////////////////MOST IMPORTANT SETTINGS////////////////////////////////////
-#define SERVO_POSITION_ENGAGEMENT 565
+#define SERVO_POSITION_ENGAGEMENT 500//545
 #define SERVO_POSITION_ENGAGEMENT_INCREASE_CURRENT 850
-#define SERVO_POSITION_TOP_END 2050
+#define SERVO_POSITION_TOP_END 1920
 #define SERVO_POSITION_UNLOCK 800
 #define POSITION_TOLERANCE 60
 
 #define POSITION_RE_TENSION_FOR_OPENING 680 
 #define POSITION_OK_FOR_OPENING 720 
 
-#define CURRENT_LIMIT 3.8 //2.8
+#define CURRENT_LIMIT 1.6 //2.8
 #define CURRENT_EXTRA_ALLOWANCE_LOCK 2.5    // <===============================
 #define OVERCURRENT_CONSECUTIVE_STEPS 10
 
@@ -81,7 +82,7 @@ Switch InputRemoteButton = Switch (LOCK_BUTTON_REMOTE, INPUT, LOW, 200, 300, 250
 #define PIN_READ_FROM_MOTOR PIN_FREE1
 #define PIN_READ_SIGNAL PIN_FREE3
 #define PIN_OUT_3_3 PIN_FREE4
-MyServoPID servoPID (PIN_READ_FROM_MOTOR, PIN_WRITE_TO_MOTOR,PIN_READ_SIGNAL, PIN_OUT_3_3, 12, 1.2, 0.54);
+MyServoPID servoPID (PIN_READ_FROM_MOTOR, PIN_WRITE_TO_MOTOR,PIN_READ_SIGNAL, PIN_OUT_3_3, 15, 1.2, 0.54);
 ///////////
 
 
@@ -229,11 +230,14 @@ void StopServo()
 {
     manual_servo = false;
     if (servo_stopped)
-    return;
+    {
+      //Serial << "StopServo called but already stopped\n";
+      return;
+    }
   int i;
   servo_stopped = true;
   servoPID.StopServo();
-  
+  Serial << " ==> StopServo called <== current position is " << current_pos << "\n";
   //mode = MODE_IDLE;
 
 }
@@ -424,8 +428,12 @@ void LockCam()
     {
       Serial << "got to locked position ... STOP!!!! " << millis() - start_time << "  \n";
       OutMotor(MOTOR_CAM, 0);
+ 
+      //
+      delay (200);
+      BringLockBackToUnlockPosition();
+      //      
       return;
-
     }
     delay (2);
 
@@ -433,9 +441,33 @@ void LockCam()
 
   Serial << "out on timeout ... STOP!!!! \n";
   OutMotor(MOTOR_CAM, 0);
+  BringLockBackToUnlockPosition();
 
 }
 
+
+void BringLockBackToUnlockPosition ()
+{
+  unsigned long start_time;
+  Serial << "--> setting locl cam going back to unlocked position\n";
+  start_time = millis();
+  OutMotor(MOTOR_CAM, CAM_COMMAND_UNLOCK);
+
+  do
+  {
+    if ( digitalRead (DIGITAL_IN_LOCK_END_STOP))
+    {
+      Serial << "got to unlock cam position ... STOP!!!! " << millis() - start_time << "  \n";
+      OutMotor(MOTOR_CAM, 0);
+      return;
+    }
+    delay (2);
+
+  } while ( (millis() - start_time) <= 1300);
+  Serial << " Cam unlock out on timeout ... STOP!!!! \n";
+
+ OutMotor(MOTOR_CAM, 0);
+}
 
 void DisplayModeAndState()
 {
@@ -879,7 +911,7 @@ void CurrentProtection()
         if (mode == MODE_CLOSING)
           //      mode = MODE_SAFETY_CLOSING;
           //      else
-          mode == MODE_IDLE;
+          mode = MODE_IDLE;
         overcurrent_cnt = 0;
         //delay (500);
       }
@@ -1078,6 +1110,3 @@ bool FootSwitchKeep()
   old_dist = dist;
   return false;
 }
-
-
-
