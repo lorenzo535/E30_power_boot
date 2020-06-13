@@ -13,7 +13,7 @@
 #define POSITION_OK_FOR_OPENING 720 
 
 #define CURRENT_LIMIT 1.6 //2.8
-#define CURRENT_EXTRA_ALLOWANCE_LOCK 2.5    // <===============================
+#define CURRENT_EXTRA_ALLOWANCE_LOCK 2.8    // <===============================
 #define OVERCURRENT_CONSECUTIVE_STEPS 10
 
 
@@ -379,7 +379,7 @@ void ProcessClosing ()
     case STATE_ENGAGED  :  StopServo(); LockCam(); boot_locked_1 = millis(); break;//SetServo(SERVO_POSITION_ENGAGEMENT);LockCam(); StopServo();  /*erial << "process closing state engaged \n"; */ break;
 
     case STATE_BOOT_LOCKED: OutMotor(MOTOR_CAM, 0); SetServo(SERVO_POSITION_UNLOCK); 
-                                    if  ((millis() - boot_locked_1) >= 3000) {
+                                    if  ((millis() - boot_locked_1) >= 2000) {
                                       StopServo(); 
                                       Serial << "process cl boot locked\n";
                                       mode = MODE_IDLE;
