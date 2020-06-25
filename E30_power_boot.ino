@@ -1,9 +1,11 @@
+
+
 //Actual board
 //ESP32 Dev board
 // use ESPSoftwareSerial 5.3.3 and ESP32 core v 1.0.3 to be sure
 
 //////////////////MOST IMPORTANT SETTINGS////////////////////////////////////
-#define SERVO_POSITION_ENGAGEMENT 500//545
+#define SERVO_POSITION_ENGAGEMENT 450//545
 #define SERVO_POSITION_ENGAGEMENT_INCREASE_CURRENT 850
 #define SERVO_POSITION_TOP_END 1920
 #define SERVO_POSITION_UNLOCK 800
@@ -20,7 +22,7 @@
 /////////////////////////////////////////////////////////////////
 
 #include <Streaming.h>
-#include "Switch.h"
+#include <avdweb_Switch.h> //switch version 1.2.1
 
 #include "myservopid.h"
 
@@ -74,8 +76,8 @@ bool show_us_distance;
 // For Switch to work as intended, object must be defined as LOW polarity
 // and event released() must be used to detect button pressed. Released goes to 1
 // as soon as the button is pressed
-Switch InputButton = Switch (LOCK_BUTTON, INPUT, LOW, 200, 300, 250, 10);
-Switch InputRemoteButton = Switch (LOCK_BUTTON_REMOTE, INPUT, LOW, 200, 300, 250, 10);
+Switch InputButton = Switch (LOCK_BUTTON, INPUT, LOW, 200, 1000, 250, 50);
+Switch InputRemoteButton = Switch (LOCK_BUTTON_REMOTE, INPUT, LOW, 200, 3000, 250, 50);
 
 ///////////// Servo PID
 #define PIN_WRITE_TO_MOTOR PIN_FREE2
@@ -556,22 +558,27 @@ void OutMotor (int _motor_ID, float _command)
 void ReadUserCommands()
 {
   /*
-    //Serial << "pushed " << InputButton.pushed()  ;
-    //Serial << "   switched " << InputButton.switched() ;
-    //Serial << "   on " << InputButton.on() ;
+    Serial << "pushed " << InputButton.pushed()  ;
+    Serial << " \n  switched " << InputButton.switched() ;
+    Serial << " \n  on " << InputButton.on() ;
+   
+    Serial << " \n";
     if (InputButton.released())
     Serial << "   released " << "\n";
+
+    if (InputButton.longPress())
+    Serial << "   longPress " << "\n";
 
     if (InputButton.pushed())
     Serial << "   pushed " << "\n";
     return;
-  */
+ */
 
 
   if (isCarMoving())
     return;
 
-  if (InputButton.released())
+  if (InputButton.longPress())
   {
     if (inhibit_first)
     {
