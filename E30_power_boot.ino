@@ -76,8 +76,8 @@ bool show_us_distance;
 // For Switch to work as intended, object must be defined as LOW polarity
 // and event released() must be used to detect button pressed. Released goes to 1
 // as soon as the button is pressed
-Switch InputButton = Switch (LOCK_BUTTON, INPUT, LOW, 200, 1000, 250, 50);
-Switch InputRemoteButton = Switch (LOCK_BUTTON_REMOTE, INPUT, LOW, 200, 3000, 250, 50);
+Switch InputButton = Switch (LOCK_BUTTON, INPUT, LOW, 50, 200, 100, 10);
+Switch InputRemoteButton = Switch (LOCK_BUTTON_REMOTE, INPUT_PULLUP, LOW, 50, 1000, 250, 10);
 
 ///////////// Servo PID
 #define PIN_WRITE_TO_MOTOR PIN_FREE2
@@ -376,7 +376,15 @@ void ProcessClosing ()
   {
 
     case STATE_AT_TOP_END :
-    case STATE_SWINGING :  SetServo(SERVO_POSITION_ENGAGEMENT); /*Serial << "process cl top end , swinging\n";*/  break;
+    case STATE_SWINGING :  SetServo(SERVO_POSITION_ENGAGEMENT); 
+                          if ( (millis() - motion_started) >= 10000)
+                          {
+                            StopServo(); 
+                            Serial << "process cl: TIMEOUT without engaging\n";
+                            mode = MODE_IDLE;
+                          }
+                          
+                          break;
 
     case STATE_ENGAGED  :  StopServo(); LockCam(); boot_locked_1 = millis(); break;//SetServo(SERVO_POSITION_ENGAGEMENT);LockCam(); StopServo();  /*erial << "process closing state engaged \n"; */ break;
 
@@ -621,7 +629,7 @@ void ReadUserCommands()
     }
   } // if lock_cmd_button
 
-  if (InputRemoteButton.released())
+  if (InputRemoteButton.longPress())
   {
     Serial << "    $$$$$$  REMOTE \n";
     if (mode != MODE_IDLE)
