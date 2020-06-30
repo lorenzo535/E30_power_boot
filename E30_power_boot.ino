@@ -5,14 +5,12 @@
 // use ESPSoftwareSerial 5.3.3 and ESP32 core v 1.0.3 to be sure
 
 //////////////////MOST IMPORTANT SETTINGS////////////////////////////////////
-#define SERVO_POSITION_ENGAGEMENT 450//545
+#define SERVO_POSITION_ENGAGEMENT 600
 #define SERVO_POSITION_ENGAGEMENT_INCREASE_CURRENT 850
-#define SERVO_POSITION_TOP_END 1920
-#define SERVO_POSITION_UNLOCK 800
+#define SERVO_POSITION_TOP_END 2100
+#define SERVO_POSITION_UNLOCK 840
 #define POSITION_TOLERANCE 60
 
-#define POSITION_RE_TENSION_FOR_OPENING 680 
-#define POSITION_OK_FOR_OPENING 720 
 
 #define CURRENT_LIMIT 1.6 //2.8
 #define CURRENT_EXTRA_ALLOWANCE_LOCK 2.8    // <===============================
@@ -77,14 +75,14 @@ bool show_us_distance;
 // and event released() must be used to detect button pressed. Released goes to 1
 // as soon as the button is pressed
 Switch InputButton = Switch (LOCK_BUTTON, INPUT, LOW, 50, 200, 100, 10);
-Switch InputRemoteButton = Switch (LOCK_BUTTON_REMOTE, INPUT_PULLUP, LOW, 50, 1000, 250, 10);
+Switch InputRemoteButton = Switch (LOCK_BUTTON_REMOTE, INPUT_PULLUP, LOW, 50, 2000, 250, 10);
 
 ///////////// Servo PID
 #define PIN_WRITE_TO_MOTOR PIN_FREE2
 #define PIN_READ_FROM_MOTOR PIN_FREE1
 #define PIN_READ_SIGNAL PIN_FREE3
 #define PIN_OUT_3_3 PIN_FREE4
-MyServoPID servoPID (PIN_READ_FROM_MOTOR, PIN_WRITE_TO_MOTOR,PIN_READ_SIGNAL, PIN_OUT_3_3, 15, 1.2, 0.54);
+MyServoPID servoPID (PIN_READ_FROM_MOTOR, PIN_WRITE_TO_MOTOR,PIN_READ_SIGNAL, PIN_OUT_3_3, 25, 1.2, 0.54);
 ///////////
 
 
@@ -246,7 +244,7 @@ void StopServo()
 
 void stuckrelease()
 {
-  //return;
+  return;
   servo_unstucker.write(UNCLICKER_ENGAGE);
   delay(1000);
   servo_unstucker.write(UNCLICKER_REST); 
@@ -254,7 +252,7 @@ void stuckrelease()
 }
 
 void loop() {
-
+  
 //Serial << digitalRead (PIN_INPUT_1) << "  " << digitalRead (PIN_INPUT_2)<< digitalRead (PIN_INPUT_3) << "  " << digitalRead (PIN_INPUT_4) <<"\n";
  // delay(200);
  // return;
@@ -377,7 +375,7 @@ void ProcessClosing ()
 
     case STATE_AT_TOP_END :
     case STATE_SWINGING :  SetServo(SERVO_POSITION_ENGAGEMENT); 
-                          if ( (millis() - motion_started) >= 10000)
+                          if ( (millis() - motion_started) >= 12000)
                           {
                             StopServo(); 
                             Serial << "process cl: TIMEOUT without engaging\n";
@@ -388,7 +386,8 @@ void ProcessClosing ()
 
     case STATE_ENGAGED  :  StopServo(); LockCam(); boot_locked_1 = millis(); break;//SetServo(SERVO_POSITION_ENGAGEMENT);LockCam(); StopServo();  /*erial << "process closing state engaged \n"; */ break;
 
-    case STATE_BOOT_LOCKED: OutMotor(MOTOR_CAM, 0); SetServo(SERVO_POSITION_UNLOCK); 
+    case STATE_BOOT_LOCKED:     BringLockBackToUnlockPosition();
+                                OutMotor(MOTOR_CAM, 0); SetServo(SERVO_POSITION_UNLOCK); 
                                     if  ((millis() - boot_locked_1) >= 2000) {
                                       StopServo(); 
                                       Serial << "process cl boot locked\n";
@@ -440,8 +439,8 @@ void LockCam()
       OutMotor(MOTOR_CAM, 0);
  
       //
-      delay (200);
-      BringLockBackToUnlockPosition();
+     // delay (200);
+     // BringLockBackToUnlockPosition();
       //      
       return;
     }
@@ -451,8 +450,7 @@ void LockCam()
 
   Serial << "out on timeout ... STOP!!!! \n";
   OutMotor(MOTOR_CAM, 0);
-  BringLockBackToUnlockPosition();
-
+  
 }
 
 
@@ -460,6 +458,12 @@ void BringLockBackToUnlockPosition ()
 {
   unsigned long start_time;
   Serial << "--> setting locl cam going back to unlocked position\n";
+  if (digitalRead (DIGITAL_IN_LOCK_END_STOP))
+    {
+      Serial << "Already there \n";
+      return;
+    }
+  
   start_time = millis();
   OutMotor(MOTOR_CAM, CAM_COMMAND_UNLOCK);
 
@@ -629,7 +633,7 @@ void ReadUserCommands()
     }
   } // if lock_cmd_button
 
-  if (InputRemoteButton.longPress())
+  if (0)//InputRemoteButton.longPress())
   {
     Serial << "    $$$$$$  REMOTE \n";
     if (mode != MODE_IDLE)
@@ -721,7 +725,7 @@ void EvaluateState()
     Serial << "sw1 " << sw1 << "  sw2 " << sw2 << "\n";
 
   state = STATE_SWINGING;
-  if (sw1)
+  if ((sw1))
   {
     state = STATE_ENGAGED;
     //Serial << "Engaged ! \n";
@@ -760,6 +764,11 @@ void EvaluateState()
   old_sw1 = sw1;
   old_sw2 = sw2;
 
+  if ( (old_state == STATE_ENGAGED) && (state == STATE_SWINGING) && (mode == MODE_CLOSING) )
+  {
+      state = STATE_ENGAGED;
+      Serial << "Prevented state flicker ENGAED -> SWINGING \n";
+  }
   if (old_state != state)
   {
     Serial << "  ==== New state is " ;
