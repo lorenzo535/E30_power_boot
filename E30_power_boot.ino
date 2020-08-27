@@ -17,6 +17,10 @@
 #define OVERCURRENT_CONSECUTIVE_STEPS 10
 
 
+//////////////////BLUETOOTH ////////////////////
+#include "BluetoothSerial.h"
+BluetoothSerial ESP_BT;
+
 /////////////////////////////////////////////////////////////////
 
 #include <Streaming.h>
@@ -181,6 +185,8 @@ void setup() {
   pinMode (PIN_US_TRIG, OUTPUT);
   pinMode (PIN_US_ECHO, INPUT);
 
+  ESP_BT.begin("boot_lid");
+
   servo_unstucker.setPeriodHertz(50);    // standard 50 hz servo 
   servo_unstucker.attach(PIN_SERVO_UNSTUCKER, 500, 2000);  // attaches the servo on pin 9 to the servo object
   servo_unstucker.write(UNCLICKER_REST); 
@@ -252,7 +258,23 @@ void stuckrelease()
 }
 
 void loop() {
-  
+  /*
+  //tests
+  static int count = 0;
+  static int count_r = 0;
+  if (digitalRead(LOCK_BUTTON))
+  {
+    count ++;
+    Serial << "count : " << count <<"\n";
+  }
+
+  if (digitalRead(LOCK_BUTTON_REMOTE))
+  {
+    count_r ++;
+    Serial << "count_r: " <<count_r <<"\n";
+  }
+  return;
+ */
 //Serial << digitalRead (PIN_INPUT_1) << "  " << digitalRead (PIN_INPUT_2)<< digitalRead (PIN_INPUT_3) << "  " << digitalRead (PIN_INPUT_4) <<"\n";
  // delay(200);
  // return;
@@ -263,6 +285,7 @@ void loop() {
   // LockCam();
   //delay(2000);
   //return;
+
 
   InputButton.poll();
   InputRemoteButton.poll();
@@ -279,6 +302,7 @@ void loop() {
   EvaluateState();
 
   ReadUserCommands();
+  ReadBTCommands();
 
   switch (mode)
   {
@@ -362,7 +386,7 @@ void ProcessOpening()
                             }
                             /* Serial << "process op swinging\n";*/ break;
 
-    case STATE_AT_TOP_END : StopServo(); Serial << "top end\n"; mode = MODE_IDLE; break;
+    case STATE_AT_TOP_END : StopServo(); Serial << "top end\n"; ESP_BT.println("top end"); mode = MODE_IDLE; break;
 
   }
 }
@@ -379,6 +403,7 @@ void ProcessClosing ()
                           {
                             StopServo(); 
                             Serial << "process cl: TIMEOUT without engaging\n";
+                            ESP_BT.println("process cl: TIMEOUT without engaging");
                             mode = MODE_IDLE;
                           }
                           
@@ -391,6 +416,7 @@ void ProcessClosing ()
                                     if  ((millis() - boot_locked_1) >= 2000) {
                                       StopServo(); 
                                       Serial << "process cl boot locked\n";
+                                      ESP_BT.println("process cl boot locked");
                                       mode = MODE_IDLE;
                                  }
                                  break;
@@ -415,6 +441,8 @@ void UnlockCam()
     if ( digitalRead (DIGITAL_IN_LOCK_END_STOP))
     {
       Serial << "got to unlock cam position ... STOP!!!! " << millis() - start_time << "  \n";
+      ESP_BT.print("got to unlock cam position ... STOP!!!! ");
+      ESP_BT.println(millis() - start_time);
       OutMotor(MOTOR_CAM, 0);
       return;
     }
@@ -423,7 +451,7 @@ void UnlockCam()
   } while ( (millis() - start_time) <= 1300);
 
   Serial << " Cam unlock out on timeout ... STOP!!!! \n";
-
+  ESP_BT.println("Cam unlock out on timeout ... STOP!!!!");
   OutMotor(MOTOR_CAM, 0);
 }
 
@@ -436,6 +464,8 @@ void LockCam()
     if ( digitalRead (PIN_LOCK_SW2))
     {
       Serial << "got to locked position ... STOP!!!! " << millis() - start_time << "  \n";
+      ESP_BT.print("got to locked position ... STOP!!!! ");
+      ESP_BT.println(millis() - start_time);
       OutMotor(MOTOR_CAM, 0);
  
       //
@@ -449,6 +479,7 @@ void LockCam()
   } while ( (millis() - start_time) <= 1400);
 
   Serial << "out on timeout ... STOP!!!! \n";
+  ESP_BT.println("out on timeout ... STOP!!!!");
   OutMotor(MOTOR_CAM, 0);
   
 }
@@ -458,9 +489,11 @@ void BringLockBackToUnlockPosition ()
 {
   unsigned long start_time;
   Serial << "--> setting locl cam going back to unlocked position\n";
+   ESP_BT.println("--> setting locl cam going back to unlocked position");
   if (digitalRead (DIGITAL_IN_LOCK_END_STOP))
     {
       Serial << "Already there \n";
+      ESP_BT.println("Already there");
       return;
     }
   
@@ -472,6 +505,8 @@ void BringLockBackToUnlockPosition ()
     if ( digitalRead (DIGITAL_IN_LOCK_END_STOP))
     {
       Serial << "got to unlock cam position ... STOP!!!! " << millis() - start_time << "  \n";
+      ESP_BT.print("got to unlocked position ... STOP!!!! ");
+      ESP_BT.println(millis() - start_time);
       OutMotor(MOTOR_CAM, 0);
       return;
     }
@@ -479,8 +514,34 @@ void BringLockBackToUnlockPosition ()
 
   } while ( (millis() - start_time) <= 1300);
   Serial << " Cam unlock out on timeout ... STOP!!!! \n";
-
+   ESP_BT.println("Cam unlock out on timeout ... STOP!!!! ");
  OutMotor(MOTOR_CAM, 0);
+}
+
+void PrintMode(unsigned short mode)
+{
+   switch (mode)
+  {
+    case MODE_IDLE : Serial << " IDLE "; ESP_BT.println("IDLE");  break;
+    case MODE_OPENING : Serial << " MODE_OPENING "; ESP_BT.println("MODE_OPENING"); break;
+    case MODE_CLOSING : Serial << " MODE_CLOSING ";ESP_BT.println("MODE_CLOSING"); break;
+    case MODE_SAFETY_CLOSING : Serial << " MODE_SAFETY_CLOSING "; ESP_BT.println("MODE_SAFETY_CLOSING");break;
+    case MODE_MANUAL_STOP: Serial << " MODE_MANUAL_STOP";ESP_BT.println("MODE_MANUAL_STOP"); break;
+  }
+  
+}
+
+
+void PrintState (unsigned short state)
+{
+  switch (state)
+  {
+    
+    case STATE_BOOT_LOCKED : Serial << "BOOT LOCKED \n"; ESP_BT.println("BOOT LOCKED"); break;
+    case STATE_ENGAGED  : Serial << "BOOT ENGAGED \n";ESP_BT.println("BOOT ENGAGED"); break;
+    case STATE_SWINGING :  Serial << "SWINGING \n"; ESP_BT.println("SWINGING");break;
+    case STATE_AT_TOP_END : Serial << "AT TOP END \n"; ESP_BT.println("AT TOP END ");break;
+  }
 }
 
 void DisplayModeAndState()
@@ -494,25 +555,13 @@ void DisplayModeAndState()
   u = 0;
 
   Serial << "Current mode: " ;
+  ESP_BT.print("Current mode: ");
 
-  switch (mode)
-  {
-    case MODE_IDLE : Serial << " IDLE "; break;
-    case MODE_OPENING : Serial << " MODE_OPENING ";  break;
-    case MODE_CLOSING : Serial << " MODE_CLOSING "; break;
-    case MODE_SAFETY_CLOSING : Serial << " MODE_SAFETY_CLOSING "; break;
-    case MODE_MANUAL_STOP: Serial << " MODE_MANUAL_STOP"; break;
-  }
+  PrintMode(mode);
 
   Serial << "Current state: " ;
-  switch (state)
-  {
-    
-    case STATE_BOOT_LOCKED : Serial << "BOOT LOCKED \n"; break;
-    case STATE_ENGAGED  : Serial << "BOOT ENGAGED \n"; break;
-    case STATE_SWINGING :  Serial << "SWINGING \n"; break;
-    case STATE_AT_TOP_END : Serial << "AT TOP END \n"; break;
-  }
+  ESP_BT.print("Current state: ");
+  PrintState (state);
 }
 
 
@@ -650,16 +699,10 @@ void ReadUserCommands()
   }
 
   if (old_mode != mode)
-  {
+  {  
     Serial << "New mode is " ;
-    switch (mode)
-    {
-      case MODE_IDLE : Serial << " IDLE \n"; break;
-      case MODE_OPENING : Serial << " MODE_OPENING \n"; motion_started = millis(); break;
-      case MODE_CLOSING : Serial << " MODE_CLOSING \n"; motion_started = millis(); break;
-      case MODE_SAFETY_CLOSING : Serial << " MODE_SAFETY_CLOSING \n"; break;
-      case MODE_MANUAL_STOP: Serial << " MODE_MANUAL_STOP\n"; break;
-    }
+    ESP_BT.print ("New mode is " );   
+    PrintMode(mode);  
   }
 
   old_mode = mode;
@@ -699,6 +742,9 @@ void SetServo(int position_target)
   if (position_target != current_target)
   {
     Serial << "sservo go to  target" << position_target << " \n";
+    ESP_BT.print ( "sservo go to  target");
+    ESP_BT.println( position_target);
+    
     //return;
   }
   current_target = position_target;
@@ -715,7 +761,11 @@ void EvaluateState()
   //Read Servo feedback
   current_pos = servoPID.GetPosition();
   if (show_position)
+  {
     Serial << "Current position " << current_pos << " \n";
+     ESP_BT.print ( "Current position ");
+    ESP_BT.println( current_pos);
+  }
 
   boolean sw1, sw2;
   sw1 = digitalRead (PIN_LOCK_SW1);
@@ -772,13 +822,8 @@ void EvaluateState()
   if (old_state != state)
   {
     Serial << "  ==== New state is " ;
-    switch (state)
-    {
-      case STATE_BOOT_LOCKED : Serial << " STATE_BOOT_LOCKED \n"; break;
-      case STATE_ENGAGED : Serial << " STATE_ENGAGED \n"; break;
-      case STATE_SWINGING : Serial << " STATE_SWINGING \n";  break;
-      case STATE_AT_TOP_END : Serial << " STATE_AT_TOP_END \n"; break;
-    }
+    ESP_BT.print ("  ==== New state is " );
+    PrintState(state);
 
   }
 
@@ -787,6 +832,17 @@ void EvaluateState()
 
 }
 
+
+void ReadBTCommands()
+{
+  char rx_byte;
+  if (ESP_BT.available())
+   {
+    Serial.print( "BLuetooth in:");
+    rx_byte = ESP_BT.read();
+    HandleRxByte (rx_byte);
+   }
+}
 
 
 
@@ -810,16 +866,45 @@ void ReadKeyboardCmds()
       {
         Serial << "B,b = bottom, T,t = top ; P,p = +5, M,m = -5;  C,c = current\n" ;
       }
-  
-  
+
+    HandleRxByte(rx_byte);
+ 
+    }  // Read 1 character
+
+    else if (nochars ==4)
+    {
+      for (i = 0; i < nochars; i++)
+      {
+        rx_byte = Serial.read();
+        rx_string += rx_byte;
+      }
+       value = atoi(rx_string.c_str());
+       if ((value > 0) && (value < 4096))
+       {
+        Serial << " %%%%%%%  Received value : " <<value <<"\n";
+        manual_servo = true;
+        SetServo (value);
+       }
+       }
+            
+     while (Serial.available()) Serial.read();
+     
+  } // Serial available
+
+} //end function  
+
+
+void HandleRxByte( char rx_byte)
+{
+    
       switch (rx_byte)
       {
         case 'M':
         case 'm': show_mode = !show_mode ; break;
         case 'U':
-        case 'u': Serial << "Unlock cam\n"; PowerDrivesOn(); UnlockCam(); PowerDrivesOff(); break;
+        case 'u': Serial << "Unlock cam\n"; ESP_BT.println ("Unlock cam"); PowerDrivesOn(); UnlockCam(); PowerDrivesOff(); break;
         case 'L':
-        case 'l': Serial << "Lock cam\n"; PowerDrivesOn(); LockCam(); PowerDrivesOff(); break;
+        case 'l': Serial << "Lock cam\n"; ESP_BT.println ("Lock cam"); PowerDrivesOn(); LockCam(); PowerDrivesOff(); break;
         case 'P':
         case 'p':  break;
         case 'T':
@@ -847,31 +932,8 @@ void ReadKeyboardCmds()
         case  'n':
         case 'N':
           Serial << "power " << (power ? "ON" : "OFF") << "\n"; power = !power; break;           
-      }  
-    }  // Read 1 character
-
-    else if (nochars ==4)
-    {
-      for (i = 0; i < nochars; i++)
-      {
-        rx_byte = Serial.read();
-        rx_string += rx_byte;
-      }
-       value = atoi(rx_string.c_str());
-       if ((value > 0) && (value < 4096))
-       {
-        Serial << " %%%%%%%  Received value : " <<value <<"\n";
-        manual_servo = true;
-        SetServo (value);
-       }
-       }
-            
-     while (Serial.available()) Serial.read();
-     
-  } // Serial available
-
-} //end function  
-
+      } 
+}
 
 
 
@@ -911,6 +973,11 @@ void CurrentProtection()
     if (skip >= 30)
     {
       Serial << " current measure " << fabs(average) << " (A)  LIMIT : " << current_limit << "\n";
+      ESP_BT.print (" current measure ");
+      ESP_BT.print (fabs(average));
+      ESP_BT.print (" (A)  LIMIT : " );
+      ESP_BT.println(current_limit);
+      
       skip = 0;
     }
     skip = skip + 1;
@@ -930,6 +997,11 @@ void CurrentProtection()
       if (deltat >= 2000)
       {
         Serial << "##### current limit reached " << fabs(average) << " (A) ; current position is " << current_pos << "\n";
+        ESP_BT.print (" ##### current limit reached ");
+        ESP_BT.print (fabs(average));
+        ESP_BT.print (" (A) ; current position is " );
+        ESP_BT.println(current_pos);
+      
         StopServo();
         show_current_measure = false;
         if (mode == MODE_CLOSING)
