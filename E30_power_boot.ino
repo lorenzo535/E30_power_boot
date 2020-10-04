@@ -420,7 +420,7 @@ void UnlockCam()
     }
     delay (2);
 
-  } while ( (millis() - start_time) <= 1300);
+  } while ( (millis() - start_time) <= 1000);
 
   Serial << " Cam unlock out on timeout ... STOP!!!! \n";
 
