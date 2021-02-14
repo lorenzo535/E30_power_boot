@@ -12,7 +12,7 @@
 #define POSITION_TOLERANCE 60
 
 
-#define CURRENT_LIMIT 1.6 //2.8
+#define CURRENT_LIMIT 1.2 //2.8
 #define CURRENT_EXTRA_ALLOWANCE_LOCK 2.8    // <===============================
 #define OVERCURRENT_CONSECUTIVE_STEPS 10
 
@@ -590,7 +590,7 @@ void ReadUserCommands()
   if (isCarMoving())
     return;
 
-  if (InputButton.longPress())
+  if (InputButton.released())
   {
     if (inhibit_first)
     {
@@ -633,7 +633,7 @@ void ReadUserCommands()
     }
   } // if lock_cmd_button
 
-  if (0)//InputRemoteButton.longPress())
+  if (InputRemoteButton.released())
   {
     Serial << "    $$$$$$  REMOTE \n";
     if (mode != MODE_IDLE)
