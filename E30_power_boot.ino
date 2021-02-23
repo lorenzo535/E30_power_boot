@@ -1,5 +1,4 @@
 
-
 //Actual board
 //ESP32 Dev board
 // use ESPSoftwareSerial 5.3.3 and ESP32 core v 1.0.3 to be sure
@@ -24,15 +23,9 @@
 
 #include "myservopid.h"
 
-#include <NewPing.h>
 
 #include <ESP32Servo.h>
 
-////////////// SERVO UNCLICKER
-Servo servo_unstucker;  // create servo object to control a servo
-#define UNCLICKER_REST 100
-#define UNCLICKER_ENGAGE 0
-#define PIN_SERVO_PWM 5
 //////////////////////////////////////////////////////////////
 
 
@@ -51,8 +44,6 @@ bool show_us_distance;
 #define PIN_FREE3   13
 #define PIN_FREE4   15
 
-#define PIN_SERVO_UNSTUCKER PIN_SERVO_PWM
-
 #define ESP32_PIN_RX2 16
 #define ESP32_PIN_TX2 17
 
@@ -66,16 +57,6 @@ bool show_us_distance;
 #define PIN_INPUT_3  19
 #define PIN_INPUT_4  18
 #define POWER_DRIVES 25
-
-#define LOCK_BUTTON   PIN_INPUT_1
-#define LOCK_BUTTON_REMOTE  PIN_INPUT_2
-#define DIGITAL_IN_LOCK_END_STOP PIN_INPUT_4
-#define MOTOR_RUNNING PIN_INPUT_3
-// For Switch to work as intended, object must be defined as LOW polarity
-// and event released() must be used to detect button pressed. Released goes to 1
-// as soon as the button is pressed
-Switch InputButton = Switch (LOCK_BUTTON, INPUT, LOW, 50, 200, 100, 10);
-Switch InputRemoteButton = Switch (LOCK_BUTTON_REMOTE, INPUT_PULLUP, LOW, 50, 2000, 250, 10);
 
 ///////////// Servo PID
 #define PIN_WRITE_TO_MOTOR PIN_FREE2
@@ -94,13 +75,22 @@ MyServoPID servoPID (PIN_READ_FROM_MOTOR, PIN_WRITE_TO_MOTOR,PIN_READ_SIGNAL, PI
 #define PIN_DIR_MOTOR_UNLOCKER -1
 #define PIN_PWM_MOTOR_CAM MOTOR1_PWM
 #define PIN_PWM_MOTOR_UNLOCKER MOTOR2_PWM
-#define CAR_CENTRAL_LOCK_STATE_INPUT D35
+#define CAR_CENTRAL_LOCK_STATE_INPUT 35
 
 #define PIN_I2C_SCL 22
 #define PIN_I2C_SDA 21
 
-#define PIN_US_TRIG  PIN_I2C_SCL
-#define PIN_US_ECHO  PIN_I2C_SDA
+#define LOCK_BUTTON             PIN_I2C_SCL //PIN_INPUT_1
+#define LOCK_BUTTON_REMOTE      PIN_I2C_SDA //PIN_INPUT_2
+#define DIGITAL_IN_LOCK_END_STOP    CAR_CENTRAL_LOCK_STATE_INPUT //PIN_INPUT_4
+#define MOTOR_RUNNING PIN_INPUT_3
+
+
+// For Switch to work as intended, object must be defined as LOW polarity
+// and event released() must be used to detect button pressed. Released goes to 1
+// as soon as the button is pressed
+Switch InputButton = Switch (LOCK_BUTTON, INPUT, LOW, 50, 200, 100, 10);
+Switch InputRemoteButton = Switch (LOCK_BUTTON_REMOTE, INPUT, LOW, 50, 200, 100, 10);
 
 //////////////////  END PIN DEFINITION
 
@@ -108,7 +98,7 @@ MyServoPID servoPID (PIN_READ_FROM_MOTOR, PIN_WRITE_TO_MOTOR,PIN_READ_SIGNAL, PI
 #define DIST_LOW 29
 #define DIST_HIGH 30
 #define MAX_DISTANCE 50
-NewPing sonar(PIN_US_TRIG, PIN_US_ECHO, MAX_DISTANCE); // NewPing setup of pins and maximum distance.
+
 ///
 
 
@@ -178,12 +168,9 @@ void setup() {
   pinMode(PIN_PWM_MOTOR_UNLOCKER, OUTPUT);
   pinMode(POWER_DRIVES, OUTPUT);
 
-  pinMode (PIN_US_TRIG, OUTPUT);
-  pinMode (PIN_US_ECHO, INPUT);
-
-  servo_unstucker.setPeriodHertz(50);    // standard 50 hz servo 
-  servo_unstucker.attach(PIN_SERVO_UNSTUCKER, 500, 2000);  // attaches the servo on pin 9 to the servo object
-  servo_unstucker.write(UNCLICKER_REST); 
+  pinMode (LOCK_BUTTON, INPUT);
+  pinMode (LOCK_BUTTON_REMOTE, INPUT);
+  pinMode (DIGITAL_IN_LOCK_END_STOP, INPUT);
 
   StopServo();
   old_sw1 = 0;
@@ -242,17 +229,9 @@ void StopServo()
 
 }
 
-void stuckrelease()
-{
-  return;
-  servo_unstucker.write(UNCLICKER_ENGAGE);
-  delay(1000);
-  servo_unstucker.write(UNCLICKER_REST); 
-
-}
 
 void loop() {
-  
+
 //Serial << digitalRead (PIN_INPUT_1) << "  " << digitalRead (PIN_INPUT_2)<< digitalRead (PIN_INPUT_3) << "  " << digitalRead (PIN_INPUT_4) <<"\n";
  // delay(200);
  // return;
@@ -291,7 +270,7 @@ void loop() {
     case MODE_SAFETY_CLOSING : mode = MODE_IDLE; break;
 
     case MODE_IDLE :  {
-        if ( FootSwitchSwing() && !isMotorRunning())
+        if (0)// FootSwitchSwing() && !isMotorRunning())
         {
           if (state == STATE_BOOT_LOCKED)
             mode = MODE_OPENING;
@@ -343,23 +322,18 @@ void PowerDrivesOff()
 }
 void ProcessOpening()
 {
-  static bool unstuck_once = false;
+
   
   switch (state)
   {
-    case STATE_BOOT_LOCKED :  UnlockCam();unstuck_once = false; break;
+    case STATE_BOOT_LOCKED :  UnlockCam();break;
     
 
-    case STATE_ENGAGED  :UnlockCam(); unstuck_once = false; /*Serial << "process op boot locked \n";*/ break;
+    case STATE_ENGAGED  :UnlockCam();  /*Serial << "process op boot locked \n";*/ break;
 
     case STATE_SWINGING :  OutMotor(MOTOR_CAM, 0); 
                            SetServo(SERVO_POSITION_TOP_END); 
-                           if ((!unstuck_once)&&(current_pos > 800)) 
-                            {
-                              Serial << "unstuck once \n";
-                                stuckrelease();
-                                unstuck_once = true;
-                            }
+
                             /* Serial << "process op swinging\n";*/ break;
 
     case STATE_AT_TOP_END : StopServo(); Serial << "top end\n"; mode = MODE_IDLE; break;
@@ -414,7 +388,7 @@ void UnlockCam()
   {
     if ( digitalRead (DIGITAL_IN_LOCK_END_STOP))
     {
-      Serial << "got to unlock cam position ... STOP!!!! " << millis() - start_time << "  \n";
+      Serial << "got to unlock cam position (signal in)... STOP!!!! " << millis() - start_time << "  \n";
       OutMotor(MOTOR_CAM, 0);
       return;
     }
@@ -592,6 +566,8 @@ void ReadUserCommands()
 
   if (InputButton.released())
   {
+    
+    Serial << "   *******  BUTTON ******* \n";
     if (inhibit_first)
     {
       inhibit_first = 0;
@@ -833,7 +809,7 @@ void ReadKeyboardCmds()
         case 'Z':
         case 'z': Serial << "show position \n"; show_position = ! show_position; break;
         case 'S':
-        case 's' : Serial << " STOP STOP at " << servoPID.GetPosition()  << "\n"; StopServo(); break;
+        case 's' : Serial << " STOP STOP at " << servoPID.GetPosition()  << "\n"; StopServo(); mode = MODE_IDLE; break;
         case 'a':
         case 'A' : Serial << " cam motor positive \n"; OutMotor (MOTOR_CAM, 0.5); delay (1000); OutMotor (MOTOR_CAM, 0); break;
         case 'q':
@@ -961,7 +937,7 @@ float ADCValueToCurrent ( int adc_in)
 }
 
 
-
+/*
 bool FootSwitchSwing()
 {
   //return false;
@@ -1134,3 +1110,4 @@ bool FootSwitchKeep()
   old_dist = dist;
   return false;
 }
+*/
