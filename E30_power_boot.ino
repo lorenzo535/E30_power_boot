@@ -90,8 +90,8 @@ MyServoPID servoPID (PIN_READ_FROM_MOTOR, PIN_WRITE_TO_MOTOR,PIN_READ_SIGNAL, PI
 // For Switch to work as intended, object must be defined as LOW polarity
 // and event released() must be used to detect button pressed. Released goes to 1
 // as soon as the button is pressed
-Switch InputButton = Switch (LOCK_BUTTON, INPUT, LOW, 50, 200, 100, 10);
-Switch InputRemoteButton = Switch (LOCK_BUTTON_REMOTE, INPUT, LOW, 50, 200, 100, 10);
+Switch InputButton = Switch (LOCK_BUTTON, INPUT_PULLDOWN, LOW, 60, 200, 100, 30);
+Switch InputRemoteButton = Switch (LOCK_BUTTON_REMOTE, INPUT_PULLDOWN, LOW, 60, 200, 100, 30);
 
 //////////////////  END PIN DEFINITION
 
@@ -153,8 +153,8 @@ char out_string[6];
 void setup() {
 
   Serial.begin(9600);
-  pinMode(PIN_LOCK_SW1, INPUT);
-  pinMode(PIN_LOCK_SW2, INPUT);
+  pinMode(PIN_LOCK_SW1, INPUT_PULLDOWN);
+  pinMode(PIN_LOCK_SW2, INPUT_PULLDOWN);
   
   pinMode(PIN_CURRENT_SENSE, INPUT);
 
@@ -169,9 +169,9 @@ void setup() {
   pinMode(PIN_PWM_MOTOR_UNLOCKER, OUTPUT);
   pinMode(POWER_DRIVES, OUTPUT);
 
-  pinMode (LOCK_BUTTON, INPUT);
-  pinMode (LOCK_BUTTON_REMOTE, INPUT);
-  pinMode (DIGITAL_IN_LOCK_END_STOP, INPUT);
+  pinMode (LOCK_BUTTON, INPUT_PULLDOWN);
+  pinMode (LOCK_BUTTON_REMOTE, INPUT_PULLDOWN);
+  pinMode (DIGITAL_IN_LOCK_END_STOP, INPUT_PULLDOWN);
 
   StopServo();
   old_sw1 = 0;
