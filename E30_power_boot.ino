@@ -114,6 +114,7 @@ Switch InputRemoteButton = Switch (LOCK_BUTTON_REMOTE, INPUT_PULLDOWN, LOW, 60, 
 #define STATE_ENGAGED 1
 #define STATE_SWINGING 2
 #define STATE_AT_TOP_END 3
+#define STATE_BOOT_LOCK_FAILED 4
 //////////////////////////////////////
 
 
@@ -332,8 +333,7 @@ void ProcessOpening()
 
     case STATE_ENGAGED  :UnlockCam();  /*Serial << "process op boot locked \n";*/ break;
 
-    case STATE_SWINGING :  OutMotor(MOTOR_CAM, 0); 
-                           SetServo(SERVO_POSITION_TOP_END); 
+    case STATE_SWINGING : SetServo(SERVO_POSITION_TOP_END); 
 
                             /* Serial << "process op swinging\n";*/ break;
 
@@ -359,16 +359,28 @@ void ProcessClosing ()
                           
                           break;
 
-    case STATE_ENGAGED  :  StopServo(); LockCam(); boot_locked_1 = millis(); break;//SetServo(SERVO_POSITION_ENGAGEMENT);LockCam(); StopServo();  /*erial << "process closing state engaged \n"; */ break;
+    case STATE_ENGAGED  :  StopServo(); 
+                            if !(LockCam())
+                            {
+                              // Couldn't manage to latch the lock
+                              // to prevent forcing reopen the boot to indicate 
+                              // there is a blockage somewhere
+                              BringLockBackToUnlockPosition();
+                              mode = MODE_OPENING;
+                            }
+                            else  
+                              boot_locked_1 = millis(); 
+                            break;
 
     case STATE_BOOT_LOCKED:     BringLockBackToUnlockPosition();
-                                OutMotor(MOTOR_CAM, 0); SetServo(SERVO_POSITION_UNLOCK); 
+                                SetServo(SERVO_POSITION_UNLOCK); 
                                     if  ((millis() - boot_locked_1) >= 2000) {
                                       StopServo(); 
                                       Serial << "process cl boot locked\n";
                                       mode = MODE_IDLE;
                                  }
                                  break;
+                 
   }
 
 }
@@ -402,7 +414,7 @@ void UnlockCam()
   OutMotor(MOTOR_CAM, 0);
 }
 
-void LockCam()
+bool LockCam()
 {
   unsigned long start_time = millis();
   OutMotor(MOTOR_CAM, CAM_COMMAND_GO_TO_LOCK);
@@ -412,19 +424,16 @@ void LockCam()
     {
       Serial << "got to locked position ... STOP!!!! " << millis() - start_time << "  \n";
       OutMotor(MOTOR_CAM, 0);
- 
-      //
-     // delay (200);
-     // BringLockBackToUnlockPosition();
-      //      
-      return;
+      return true;
     }
     delay (2);
 
-  } while ( (millis() - start_time) <= 1400);
+  } while ( (millis() - start_time) <= 2000);
 
   Serial << "out on timeout ... STOP!!!! \n";
+  
   OutMotor(MOTOR_CAM, 0);
+  return false;
   
 }
 
