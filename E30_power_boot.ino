@@ -11,8 +11,8 @@
 #define POSITION_TOLERANCE 60
 
 
-#define CURRENT_LIMIT 1.2 //2.8
-#define CURRENT_EXTRA_ALLOWANCE_LOCK 2.8    // <===============================
+#define CURRENT_LIMIT 0.8 //2.8
+#define CURRENT_EXTRA_ALLOWANCE_LOCK 3.2    // <===============================
 #define OVERCURRENT_CONSECUTIVE_STEPS 10
 
 
@@ -90,8 +90,8 @@ MyServoPID servoPID (PIN_READ_FROM_MOTOR, PIN_WRITE_TO_MOTOR,PIN_READ_SIGNAL, PI
 // For Switch to work as intended, object must be defined as LOW polarity
 // and event released() must be used to detect button pressed. Released goes to 1
 // as soon as the button is pressed
-Switch InputButton = Switch (LOCK_BUTTON, INPUT_PULLDOWN, LOW, 60, 200, 100, 30);
-Switch InputRemoteButton = Switch (LOCK_BUTTON_REMOTE, INPUT_PULLDOWN, LOW, 60, 200, 100, 30);
+Switch InputButton = Switch (LOCK_BUTTON, INPUT_PULLDOWN, LOW, 60, 100, 100, 30);
+Switch InputRemoteButton = Switch (LOCK_BUTTON_REMOTE, INPUT_PULLDOWN, LOW, 60, 100, 100, 30);
 
 //////////////////  END PIN DEFINITION
 
@@ -148,6 +148,7 @@ boolean servo_stopped, manual_servo;
 float raw_current[ANALOG_AVERAGING_STEPS];
 unsigned long motion_started, boot_locked_1;
 short unsigned int current_av_steps, position_av_steps;
+short unsigned int skip;
 
 char out_string[6];
 
@@ -211,6 +212,7 @@ void setup() {
   show_us_distance = false;
   old_millis = t1;
   boot_locked_1 = t1;
+  skip = 0;
 
 
 }
@@ -250,8 +252,15 @@ void loop() {
 
   //TestServo();
   if (!servo_stopped)
+  {  
+    if (skip > 5)
+    {
+    skip = 0;
     servoPID.Compute(out_string);    
-
+    }
+    else skip++;
+  }
+  
   if (show_mode)
     DisplayModeAndState();
 
@@ -395,11 +404,13 @@ void ProcessClosing ()
 
 void UnlockCam()
 {
+  Serial << "unlock cam\n";
     
   OutMotor(MOTOR_UNLOCKER, 1);
   delay (500);
   OutMotor(MOTOR_UNLOCKER, 0);
 
+/*
   unsigned long start_time = millis();
   OutMotor(MOTOR_CAM, CAM_COMMAND_UNLOCK);
 
@@ -418,6 +429,7 @@ void UnlockCam()
   Serial << " Cam unlock out on timeout ... STOP!!!! \n";
 
   OutMotor(MOTOR_CAM, 0);
+  */
 }
 
 bool LockCam()
@@ -584,12 +596,12 @@ void ReadUserCommands()
   {
     
     Serial << "   *******  BUTTON ******* \n";
-    if (inhibit_first)
+  /*  if (inhibit_first)
     {
       inhibit_first = 0;
       return;
     }
-
+*/
     if (isCarLocked())
       if (state == STATE_BOOT_LOCKED)
         mode = MODE_IDLE;
@@ -691,14 +703,13 @@ void SetServo(int position_target)
   if (position_target != current_target)
   {
     Serial << "sservo go to  target" << position_target << " \n";
-    //return;
   }
   current_target = position_target;
 
 
   servoPID.SetPosition(position_target);
   servo_stopped = false;
-  
+    
 }
 
 void EvaluateState()
@@ -918,8 +929,8 @@ void CurrentProtection()
     {
 
       deltat = millis() - motion_started;
-      //Inhibit first two seconds after servo has started moving
-      if (deltat >= 2000)
+      //Inhibit first 0.5 seconds after servo has started moving
+      if (deltat >= 500)
       {
         Serial << "##### current limit reached " << fabs(average) << " (A) ; current position is " << current_pos << "\n";
         StopServo();
