@@ -359,17 +359,23 @@ void ProcessClosing ()
                           
                           break;
 
-    case STATE_ENGAGED  :  StopServo(); 
-                            if !(LockCam())
+    case STATE_ENGAGED  :  
+                            StopServo();
+                            Serial << "trying to lock cam:" ; 
+                            if (!(LockCam()))
                             {
                               // Couldn't manage to latch the lock
                               // to prevent forcing reopen the boot to indicate 
                               // there is a blockage somewhere
+                              Serial << "failed\n";
                               BringLockBackToUnlockPosition();
                               mode = MODE_OPENING;
                             }
-                            else  
-                              boot_locked_1 = millis(); 
+                            else 
+                            { 
+                              boot_locked_1 = millis();
+                              Serial << "managed\n";
+                            } 
                             break;
 
     case STATE_BOOT_LOCKED:     BringLockBackToUnlockPosition();
