@@ -404,6 +404,7 @@ void ProcessClosing ()
 
 void UnlockCam()
 {
+  BringLockBackToUnlockPosition();
   Serial << "unlock cam\n";
     
   OutMotor(MOTOR_UNLOCKER, 1);
@@ -446,7 +447,7 @@ bool LockCam()
     }
     delay (2);
 
-  } while ( (millis() - start_time) <= 2000);
+  } while ( (millis() - start_time) <= 1200);
 
   Serial << "out on timeout ... STOP!!!! \n";
   
