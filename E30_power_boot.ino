@@ -11,7 +11,7 @@
 #define POSITION_TOLERANCE 60
 
 
-#define CURRENT_LIMIT 0.8 //2.8
+#define CURRENT_LIMIT 1.2 //2.8
 #define CURRENT_EXTRA_ALLOWANCE_LOCK 3.2    // <===============================
 #define OVERCURRENT_CONSECUTIVE_STEPS 10
 
