@@ -378,18 +378,18 @@ void ProcessClosing ()
                               // there is a blockage somewhere
                               Serial << "failed\n";
                               BringLockBackToUnlockPosition();
-                              mode = MODE_OPENING;
+                              mode = MODE_IDLE;
                             }
                             else 
                             { 
                               boot_locked_1 = millis();
                               Serial << "managed\n";
+                              BringLockBackToUnlockPosition();
+                              SetServo(SERVO_POSITION_UNLOCK);
                             } 
                             break;
 
-    case STATE_BOOT_LOCKED:     BringLockBackToUnlockPosition();
-                                SetServo(SERVO_POSITION_UNLOCK); 
-                                    if  ((millis() - boot_locked_1) >= 2000) {
+    case STATE_BOOT_LOCKED:     if  ((millis() - boot_locked_1) >= 2000) {
                                       StopServo(); 
                                       Serial << "process cl boot locked\n";
                                       mode = MODE_IDLE;
@@ -442,6 +442,7 @@ bool LockCam()
     if ( digitalRead (PIN_LOCK_SW2))
     {
       Serial << "got to locked position ... STOP!!!! " << millis() - start_time << "  \n";
+      delay (20); //delay to force motor a little to make sure state is forced
       OutMotor(MOTOR_CAM, 0);
       return true;
     }
