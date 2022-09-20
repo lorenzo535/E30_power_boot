@@ -727,7 +727,7 @@ void EvaluateState()
   sw2 = digitalRead (PIN_LOCK_SW2);
 
   if (show_switches)
-    Serial << "sw1 " << sw1 << "  sw2 " << sw2 << "\n";
+    Serial << "sw1 " << sw1 << "  sw2 " << sw2 << "lock cam" << digitalRead (DIGITAL_IN_LOCK_END_STOP) << "\n";
 
   state = STATE_SWINGING;
   if ((sw1))
@@ -848,7 +848,10 @@ void ReadKeyboardCmds()
         case '1' : mode = MODE_CLOSING; Serial << "closing keyboard command \n"; break;
         case '2' : mode = MODE_OPENING; Serial << "opening keyboard command \n"; break;
         case '3' : show_switches = !show_switches; break;
-        
+        case 'k' : BringLockBackToUnlockPosition(); break;
+        case 'h' :   OutMotor(MOTOR_CAM, CAM_COMMAND_UNLOCK); delay (800); OutMotor(MOTOR_CAM, 0); break;
+
+
         case  'n':
         case 'N':
           Serial << "power " << (power ? "ON" : "OFF") << "\n"; power = !power; break;           
