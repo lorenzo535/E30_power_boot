@@ -141,12 +141,12 @@ void MyServoPID::Compute(char* output_string)
     
     if (m_pid_output <= 0)
     {
-            digitalWrite (m_dir_pin, 0);
+            digitalWrite (m_dir_pin, 1);
             analogWrite (m_pwm_pin, pwm);//pwm);
     }
     else
     {
-         digitalWrite (m_dir_pin, 1);
+         digitalWrite (m_dir_pin, 0);
           analogWrite (m_pwm_pin, pwm);//pwm);
     }
 
