@@ -4,27 +4,22 @@
 // use ESPSoftwareSerial 5.3.3 and ESP32 core v 1.0.3 to be sure
 
 //////////////////MOST IMPORTANT SETTINGS////////////////////////////////////
-#define SERVO_POSITION_ENGAGEMENT 600
-#define SERVO_POSITION_ENGAGEMENT_INCREASE_CURRENT 850
-#define SERVO_POSITION_TOP_END 2100
-#define SERVO_POSITION_UNLOCK 840
-#define POSITION_TOLERANCE 60
+#define SERVO_POSITION_ENGAGEMENT 180
+#define SERVO_POSITION_ENGAGEMENT_INCREASE_CURRENT SERVO_POSITION_ENGAGEMENT +70
+#define SERVO_POSITION_TOP_END 640
+#define SERVO_POSITION_UNLOCK SERVO_POSITION_ENGAGEMENT_INCREASE_CURRENT 
+#define POSITION_TOLERANCE 50
 
 
-#define CURRENT_LIMIT 1.2 //2.8
-#define CURRENT_EXTRA_ALLOWANCE_LOCK 3.2    // <===============================
-#define OVERCURRENT_CONSECUTIVE_STEPS 10
+#define CURRENT_LIMIT 5
+#define CURRENT_EXTRA_ALLOWANCE_LOCK 3.0//M3.2    // <===============================
+#define OVERCURRENT_CONSECUTIVE_STEPS 15
 
 
 /////////////////////////////////////////////////////////////////
 
 #include <Streaming.h>
 #include <avdweb_Switch.h> //switch version 1.2.1
-
-#include "myservopid.h"
-
-
-#include <ESP32Servo.h>
 
 //////////////////////////////////////////////////////////////
 
@@ -55,26 +50,22 @@ bool show_us_distance;
 #define PIN_INPUT_1  23
 #define PIN_INPUT_2  2
 #define PIN_INPUT_3  19
-#define PIN_INPUT_4  18
-#define POWER_DRIVES 25
 
-///////////// Servo PID
-#define PIN_WRITE_TO_MOTOR PIN_FREE2
-#define PIN_READ_FROM_MOTOR PIN_FREE1
-#define PIN_READ_SIGNAL PIN_FREE3
-#define PIN_OUT_3_3 PIN_FREE4
-MyServoPID servoPID (PIN_READ_FROM_MOTOR, PIN_WRITE_TO_MOTOR,PIN_READ_SIGNAL, PIN_OUT_3_3, 25, 1.2, 0.54);
-///////////
+#define POWER_DRIVES 5
 
 
 #define MOTOR1_DIR 33
 #define MOTOR1_PWM 32
+#define MOTOR2_DIR 23
 #define MOTOR2_PWM 26
 
-#define PIN_DIR_MOTOR_CAM  MOTOR1_DIR
-#define PIN_DIR_MOTOR_UNLOCKER -1
-#define PIN_PWM_MOTOR_CAM MOTOR1_PWM
-#define PIN_PWM_MOTOR_UNLOCKER MOTOR2_PWM
+#define UNLOCK_MOTOR_CMD 25
+
+#define PIN_DIR_MOTOR_CAM  MOTOR2_DIR
+#define PIN_PWM_MOTOR_CAM MOTOR2_PWM
+#define PIN_DIR_SERVO_MOTOR MOTOR1_DIR
+#define PIN_PWM_SERVO_MOTOR MOTOR1_PWM
+
 #define CAR_CENTRAL_LOCK_STATE_INPUT 35
 
 #define PIN_I2C_SCL 22
@@ -83,8 +74,16 @@ MyServoPID servoPID (PIN_READ_FROM_MOTOR, PIN_WRITE_TO_MOTOR,PIN_READ_SIGNAL, PI
 
 #define LOCK_BUTTON             PIN_I2C_SCL //PIN_INPUT_1
 #define LOCK_BUTTON_REMOTE      PIN_I2C_SDA //PIN_INPUT_2
-#define DIGITAL_IN_LOCK_END_STOP    PIN_INPUT_4
+#define DIGITAL_IN_LOCK_END_STOP    18
 #define MOTOR_RUNNING PIN_INPUT_3
+
+
+///////////// Servo PID
+#define PIN_SERVO_POS_FB 27
+#include "myservopid.h"
+MyServoPID servoPID (PIN_PWM_SERVO_MOTOR, PIN_DIR_SERVO_MOTOR,PIN_SERVO_POS_FB, 65, 9.2, 0.54);
+///////////
+
 
 
 // For Switch to work as intended, object must be defined as LOW polarity
@@ -124,9 +123,8 @@ Switch InputRemoteButton = Switch (LOCK_BUTTON_REMOTE, INPUT_PULLDOWN, LOW, 60, 
 #define POS_FEEDBACK_LOW_BOUND 1000
 #define POS_FEEDBACK_HIGH_BOUND 2000
 #define MOTOR_CAM 1
-#define MOTOR_UNLOCKER 2
-
-
+#define MOTOR_UNLOCKER 3
+#define MOTOR_SERVO 2
 
 unsigned short mode, old_mode, mode_when_stopped_was;
 unsigned short state, old_state;
@@ -152,6 +150,7 @@ short unsigned int skip;
 
 char out_string[6];
 
+
 void setup() {
 
   Serial.begin(9600);
@@ -163,12 +162,15 @@ void setup() {
   pinMode(PIN_INPUT_1, INPUT);
   pinMode(PIN_INPUT_2, INPUT);
   pinMode(PIN_INPUT_3, INPUT);
-  pinMode(PIN_INPUT_4, INPUT);
+  pinMode(DIGITAL_IN_LOCK_END_STOP, INPUT);
 
 
   pinMode(PIN_DIR_MOTOR_CAM, OUTPUT);
   pinMode(PIN_PWM_MOTOR_CAM, OUTPUT);
-  pinMode(PIN_PWM_MOTOR_UNLOCKER, OUTPUT);
+  pinMode(PIN_DIR_SERVO_MOTOR, OUTPUT);
+  pinMode(PIN_PWM_SERVO_MOTOR, OUTPUT);
+  
+  pinMode(UNLOCK_MOTOR_CMD, OUTPUT);
   pinMode(POWER_DRIVES, OUTPUT);
 
   pinMode (LOCK_BUTTON, INPUT_PULLDOWN);
@@ -235,11 +237,13 @@ void StopServo()
 
 
 void loop() {
+   
 
 //Serial << digitalRead (PIN_INPUT_1) << "  " << digitalRead (PIN_INPUT_2)<< digitalRead (PIN_INPUT_3) << "  " << digitalRead (PIN_INPUT_4) <<"\n";
  // delay(200);
  // return;
 
+  
   // PowerDrivesOn();
   // UnlockCam();
   // delay(2000);
@@ -386,10 +390,11 @@ void ProcessClosing ()
                               Serial << "managed\n";
                               BringLockBackToUnlockPosition();
                               SetServo(SERVO_POSITION_UNLOCK);
+                              
                             } 
                             break;
 
-    case STATE_BOOT_LOCKED:     if  ((millis() - boot_locked_1) >= 2000) {
+    case STATE_BOOT_LOCKED:     if  ((millis() - boot_locked_1) >= 3000) {
                                       StopServo(); 
                                       Serial << "process cl boot locked\n";
                                       mode = MODE_IDLE;
@@ -400,6 +405,13 @@ void ProcessClosing ()
 
 }
 
+void UnlockMotorCmd()
+{
+  OutMotor(MOTOR_UNLOCKER, 1);
+  delay (500);
+  OutMotor(MOTOR_UNLOCKER, 0);
+  
+}
 
 
 void UnlockCam()
@@ -544,7 +556,10 @@ void OutMotor (int _motor_ID, float _command)
   switch (_motor_ID)
   {
     case MOTOR_CAM : motor_dir = PIN_DIR_MOTOR_CAM; motor_PWM = PIN_PWM_MOTOR_CAM; break;
-    case MOTOR_UNLOCKER : motor_dir = PIN_DIR_MOTOR_UNLOCKER; motor_PWM = PIN_PWM_MOTOR_UNLOCKER; break;
+    case MOTOR_UNLOCKER : if (_command != 0 ) 
+                              _command = 1; 
+                             digitalWrite(UNLOCK_MOTOR_CMD,_command); return; break;
+    case MOTOR_SERVO : motor_dir = PIN_DIR_SERVO_MOTOR; motor_PWM = PIN_PWM_SERVO_MOTOR; break;
   }
 
   if (_command >= 1.0)
@@ -552,11 +567,11 @@ void OutMotor (int _motor_ID, float _command)
   if (_command <= -1.0)
     _command = -1.0;
 
-  if (motor_dir != PIN_DIR_MOTOR_UNLOCKER)
-    if (_command < 0)
-      digitalWrite(motor_dir, 1);
-    else
-      digitalWrite(motor_dir, 0);
+ 
+   if (_command < 0)
+     digitalWrite(motor_dir, 1);
+   else
+     digitalWrite(motor_dir, 0);
 
 
   // unsigned int pwm = (unsigned int) (fabs(_command * 255));
@@ -961,7 +976,7 @@ float ADCValueToCurrent ( int adc_in)
 
   if (0)//show_current_measure)
     Serial << "Raw ADC current is "<< adc_in <<"\n";
-  float temp = adc_in - 900;
+  float temp = adc_in - 1200;
   float mv = (temp / 4096.0) * 3300;
 
   return ((mv - 1650) / MV_PER_AMP);

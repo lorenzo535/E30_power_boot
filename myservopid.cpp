@@ -8,10 +8,10 @@
 #ifndef ARDUINO_STREAMING
 #include <Streaming.h>
 #endif 
+#include <analogWrite.h>
 
-MyServoPID::MyServoPID(unsigned short RXPIN, unsigned short TXPIN, unsigned short signal_pin, unsigned short PIN_3_3, double Kp, double Ki, double Kd ) : m_PID( &m_pid_measure, &m_pid_output, &m_setpoint, Kp, Ki, Kd,P_ON_E, REVERSE,400)
+MyServoPID::MyServoPID(unsigned short PWMPIN, unsigned short DIRPIN, unsigned short signal_pin, double Kp, double Ki, double Kd ) : m_PID( &m_pid_measure, &m_pid_output, &m_setpoint, Kp, Ki, Kd,P_ON_E, REVERSE,400)
 {
-    m_softserial.begin(9600, RXPIN,TXPIN, SWSERIAL_8N1, false, 256);
     StopServo();
     
     is_stopped = false;
@@ -23,9 +23,9 @@ MyServoPID::MyServoPID(unsigned short RXPIN, unsigned short TXPIN, unsigned shor
 
     m_signal_pin = signal_pin;
     pinMode (m_signal_pin, INPUT);
+    m_dir_pin = DIRPIN;
+    m_pwm_pin = PWMPIN;
     
-    pinMode (PIN_3_3, OUTPUT);
-    digitalWrite (PIN_3_3, HIGH);
     
     int j;
     for (j = 0; j < ANALOG_AVERAGING_STEPS; j++)
@@ -49,13 +49,15 @@ return m_current_position;
 
 void MyServoPID::StopServo()
 {
-    m_softserial.println("X");
+    digitalWrite (m_dir_pin, 0);
+    analogWrite (m_pwm_pin, 0);
     is_stopped = true;
 }
 
 void MyServoPID::Break()
 {
-    m_softserial.println("B");
+    digitalWrite (m_dir_pin, 0);
+    analogWrite (m_pwm_pin, 0);
     is_breaked = true;
 }
 
@@ -63,7 +65,7 @@ void MyServoPID::SetPosition (double pos)
 {
     is_stopped = false;
     is_breaked = false;
-    m_softserial.println("GO");
+    
     m_setpoint = pos;
 
 }
@@ -88,6 +90,8 @@ unsigned short MyServoPID::ReadFilteredPosition()
     average = average + m_raw_signal [j];
   }
   average = average / ANALOG_AVERAGING_STEPS;
+
+  //Serial << " raw " << anain <<"  average: " <<average <<"\n";
 
   return  average;
 
@@ -121,7 +125,7 @@ void MyServoPID::Compute(char* output_string)
 {
     
     m_current_position = ReadFilteredPosition();
-    //Serial << "m_current_position is : " << m_current_position<<" \n";
+   // Serial << "m_current_position is : " << m_current_position<< " setpoint:"<<m_setpoint<< " \n";
     
     if ((is_stopped)||(is_breaked))
             return;
@@ -129,15 +133,22 @@ void MyServoPID::Compute(char* output_string)
 
    m_PID.Compute();
 
-  // Serial << "output is : " << m_pid_output <<" \n";
+   //Serial << "output is : " << m_pid_output <<" \n";
     unsigned short ushort_speed_cmd = (unsigned short) fabs (FilterOutput(m_pid_output));
+    float pwm_f = abs(ushort_speed_cmd) / 3200.0;
+    unsigned short pwm = (unsigned short) (pwm_f * 255.0);
+   //Serial << "ushort_speed_cmd is " << ushort_speed_cmd << " pwm is : " << pwm <<" \n";
+    
     if (m_pid_output <= 0)
-        sprintf (output_string, "F%04d",ushort_speed_cmd );
+    {
+            digitalWrite (m_dir_pin, 0);
+            analogWrite (m_pwm_pin, pwm);//pwm);
+    }
     else
-        sprintf (output_string, "R%04d",ushort_speed_cmd );
-   m_softserial.println("GO");
-   m_softserial.println(output_string);
+    {
+         digitalWrite (m_dir_pin, 1);
+          analogWrite (m_pwm_pin, pwm);//pwm);
+    }
 
 
 }
-

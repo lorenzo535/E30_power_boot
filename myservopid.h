@@ -1,7 +1,6 @@
 #ifndef MYSERVOPID_H
 #define MYSERVOPID_H
 
-#include <SoftwareSerial.h>
 #define ANALOG_AVERAGING_STEPS 10
 #define OUTPUT_AVERAGING_STEPS 3
 #include "PID_v1l.h"
@@ -9,7 +8,7 @@
 class MyServoPID
 {
 public:
-    MyServoPID(unsigned short TXPIN, unsigned short RXPIN,unsigned short SIGNALPIN, unsigned short PIN_3_3, double Kp, double Ki, double Kd );
+    MyServoPID(unsigned short PWMPIN, unsigned short DIRPIN,unsigned short SIGNALPIN, double Kp, double Ki, double Kd );
     ~MyServoPID();
 
     void StopServo();
@@ -22,8 +21,7 @@ public:
 private:
     double FilterOutput(double unfiltered);
     double m_Kp, m_Ki, m_Kd;
-    unsigned short m_tx_pin, m_rx_pin;
-    SoftwareSerial m_softserial;
+    unsigned short m_pwm_pin, m_dir_pin;
     PID m_PID;
     double m_setpoint, m_pid_output, m_pid_measure;
     bool is_stopped, is_breaked;
