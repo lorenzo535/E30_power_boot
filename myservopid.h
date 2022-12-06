@@ -17,6 +17,7 @@ public:
     void Compute(char* output_string);
     unsigned short GetPosition();
     unsigned short ReadFilteredPosition();
+    void Output(bool _dir, unsigned short _pwm);
 
 private:
     double FilterOutput(double unfiltered);

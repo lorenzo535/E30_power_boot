@@ -133,22 +133,30 @@ void MyServoPID::Compute(char* output_string)
 
    m_PID.Compute();
 
-   //Serial << "output is : " << m_pid_output <<" \n";
+ 
+    //Serial << "output is : " << _output <<" \n";
     unsigned short ushort_speed_cmd = (unsigned short) fabs (FilterOutput(m_pid_output));
     float pwm_f = abs(ushort_speed_cmd) / 3200.0;
     unsigned short pwm = (unsigned short) (pwm_f * 255.0);
    //Serial << "ushort_speed_cmd is " << ushort_speed_cmd << " pwm is : " << pwm <<" \n";
     
-    if (m_pid_output <= 0)
+   bool dir = (m_pid_output > 0? 1 : 0);
+   Output (dir, pwm)  ;  
+
+
+}
+
+void MyServoPID::Output(bool _dir, unsigned short _pwm)
+{
+   
+  if (_dir )
     {
-            digitalWrite (m_dir_pin, 1);
-            analogWrite (m_pwm_pin, pwm);//pwm);
+            digitalWrite (m_dir_pin, 0);
+            analogWrite (m_pwm_pin, _pwm);
     }
     else
     {
-         digitalWrite (m_dir_pin, 0);
-          analogWrite (m_pwm_pin, pwm);//pwm);
-    }
-
-
+         digitalWrite (m_dir_pin, 1);
+          analogWrite (m_pwm_pin, _pwm);
+    } 
 }

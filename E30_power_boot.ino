@@ -4,15 +4,16 @@
 // use ESPSoftwareSerial 5.3.3 and ESP32 core v 1.0.3 to be sure
 
 //////////////////MOST IMPORTANT SETTINGS////////////////////////////////////
-#define SERVO_POSITION_ENGAGEMENT 590
-#define SERVO_POSITION_ENGAGEMENT_INCREASE_CURRENT SERVO_POSITION_ENGAGEMENT +250
-#define SERVO_POSITION_TOP_END 2100
-#define SERVO_POSITION_UNLOCK SERVO_POSITION_ENGAGEMENT_INCREASE_CURRENT - 10
-#define POSITION_TOLERANCE 60
+#define SERVO_POSITION_ENGAGEMENT 1900
+#define SERVO_POSITION_ENGAGEMENT_INCREASE_CURRENT SERVO_POSITION_ENGAGEMENT +120
+#define SERVO_POSITION_TOP_END 2450
+#define SERVO_POSITION_UNLOCK SERVO_POSITION_ENGAGEMENT_INCREASE_CURRENT + 50
+#define POSITION_TOLERANCE 30
+#define POSITION_TOLERANCE_HISTERESIS 30
 
 
-#define CURRENT_LIMIT 1.3
-#define CURRENT_EXTRA_ALLOWANCE_LOCK 3.0//M3.2    // <===============================
+#define CURRENT_LIMIT 3.4
+#define CURRENT_EXTRA_ALLOWANCE_LOCK 4.0//M3.2    // <===============================
 #define OVERCURRENT_CONSECUTIVE_STEPS 15
 
 
@@ -81,7 +82,7 @@ bool show_us_distance;
 ///////////// Servo PID
 #define PIN_SERVO_POS_FB 27
 #include "myservopid.h"
-MyServoPID servoPID (PIN_PWM_SERVO_MOTOR, PIN_DIR_SERVO_MOTOR,PIN_SERVO_POS_FB, 45, 1.2, 0.54);
+MyServoPID servoPID (PIN_PWM_SERVO_MOTOR, PIN_DIR_SERVO_MOTOR,PIN_SERVO_POS_FB, 45, 10.2, 0.54);
 
 
 
@@ -182,6 +183,7 @@ void setup() {
   old_state = -1;
   old_mode = -1;
   mode = MODE_IDLE;
+  state = STATE_SWINGING;
   show_switches = 0;
   show_position = 0;
   int j;
@@ -389,11 +391,11 @@ void ProcessClosing ()
                               Serial << "managed\n";
                               BringLockBackToUnlockPosition();
                               SetServo(SERVO_POSITION_UNLOCK);
-                              
                             } 
                             break;
 
-    case STATE_BOOT_LOCKED:     if  ((millis() - boot_locked_1) >= 3000) {
+    case STATE_BOOT_LOCKED:     
+                                if  ((millis() - boot_locked_1) >= 4000) {
                                       StopServo(); 
                                       Serial << "process cl boot locked\n";
                                       mode = MODE_IDLE;
@@ -743,13 +745,12 @@ void EvaluateState()
   if (show_switches)
     Serial << "sw1 " << sw1 << "  sw2 " << sw2 << "lock cam" << digitalRead (DIGITAL_IN_LOCK_END_STOP) << "\n";
 
-  state = STATE_SWINGING;
+
   if ((sw1))
   {
     state = STATE_ENGAGED;
     //Serial << "Engaged ! \n";
   }
-
 
   if (sw2)
   {
@@ -757,28 +758,16 @@ void EvaluateState()
     //Serial << "Boot locked ! \n";
   }
 
-
   if (!sw1 && !sw2)
   {
-    if ((abs (current_pos - SERVO_POSITION_TOP_END) <=  POSITION_TOLERANCE - (mode == MODE_OPENING ? 40 : 0))  || (current_pos >= (SERVO_POSITION_TOP_END)))
-    {
 
-      //Serial << "xount = " << count_debounce << "position = " << current_pos << "\n";
-      count_debounce ++;
-      if (count_debounce >= 10)
-      {
+   if (current_pos < (SERVO_POSITION_TOP_END -POSITION_TOLERANCE - POSITION_TOLERANCE_HISTERESIS ))
+    state = STATE_SWINGING;
+    
+    
+    if ((abs (current_pos - SERVO_POSITION_TOP_END) <=  POSITION_TOLERANCE )  || (current_pos >= (SERVO_POSITION_TOP_END)))
         state = STATE_AT_TOP_END;
-        count_debounce = 10; // bound counter
-
-      }
-
-    }
-    else count_debounce --;
-    if (count_debounce < 0)
-      count_debounce = 0;
   }
-
-
 
   old_sw1 = sw1;
   old_sw2 = sw2;
@@ -788,6 +777,7 @@ void EvaluateState()
       state = STATE_ENGAGED;
       Serial << "Prevented state flicker ENGAED -> SWINGING \n";
   }
+  
   if (old_state != state)
   {
     Serial << "  ==== New state is " ;
@@ -839,8 +829,8 @@ void ReadKeyboardCmds()
         case 'u': Serial << "Unlock cam\n"; PowerDrivesOn(); UnlockCam(); PowerDrivesOff(); break;
         case 'L':
         case 'l': Serial << "Lock cam\n"; PowerDrivesOn(); LockCam(); PowerDrivesOff(); break;
-        case 'P':
-        case 'p':  break;
+        case 'P': Serial << "motor out POSITIVE";    PowerDrivesOn(); servoPID.Output(1, 200); delay (1000);  PowerDrivesOff();break;
+        case 'p': Serial << "motor out NEGATIVE";   PowerDrivesOn();  servoPID.Output(0,200); delay (1000); PowerDrivesOff();break;
         case 'T':
         case 't': Serial << "go to top end \n" ; servoPID.SetPosition(SERVO_POSITION_ENGAGEMENT);break;
         case 'B':
@@ -854,9 +844,9 @@ void ReadKeyboardCmds()
         case 'S':
         case 's' : Serial << " STOP STOP at " << servoPID.GetPosition()  << "\n"; StopServo(); mode = MODE_IDLE; break;
         case 'a':
-        case 'A' : Serial << " cam motor positive \n"; OutMotor (MOTOR_CAM, 0.5); delay (1000); OutMotor (MOTOR_CAM, 0); break;
+        case 'A' : Serial << " cam motor positive \n"; PowerDrivesOn(); OutMotor (MOTOR_CAM, 0.5); delay (1000); OutMotor (MOTOR_CAM, 0);  PowerDrivesOff();break;
         case 'q':
-        case 'Q' : Serial << " cam motor negative \n"; OutMotor (MOTOR_CAM, -0.5); delay (1000); OutMotor (MOTOR_CAM, 0); break;
+        case 'Q' : Serial << " cam motor negative \n";  PowerDrivesOn();OutMotor (MOTOR_CAM, -0.5); delay (1000); OutMotor (MOTOR_CAM, 0); PowerDrivesOff(); break;
         case 'w':
         case 'W' : Serial << " unlock motor  \n"; OutMotor (MOTOR_UNLOCKER, 0.5); delay (1000); OutMotor (MOTOR_UNLOCKER, 0); break;
         case '1' : mode = MODE_CLOSING; Serial << "closing keyboard command \n"; break;
