@@ -38,7 +38,7 @@ bool show_us_distance;
 #define PIN_FREE1   14
 #define PIN_FREE2   12
 #define PIN_FREE3   13
-#define PIN_FREE4   15
+#define PIN_FREE4   15  // USED for car central lock signal
 
 #define ESP32_PIN_RX2 16
 #define ESP32_PIN_TX2 17
@@ -49,8 +49,8 @@ bool show_us_distance;
 #define PIN_CURRENT_SENSE 34  //pin 10 on board
 
 #define PIN_INPUT_1  23
-#define PIN_INPUT_2  2
-#define PIN_INPUT_3  19
+#define PIN_INPUT_2  2  // trunk button
+#define PIN_INPUT_3  19 //dashboard  button
 
 #define POWER_DRIVES 5
 
@@ -67,16 +67,17 @@ bool show_us_distance;
 #define PIN_DIR_SERVO_MOTOR MOTOR1_DIR
 #define PIN_PWM_SERVO_MOTOR MOTOR1_PWM
 
-#define CAR_CENTRAL_LOCK_STATE_INPUT 35
+#define CAR_CENTRAL_LOCK_STATE_INPUT 35  //not used for central lock in because INPUT_PULLUP doesnt work on D35
 
 #define PIN_I2C_SCL 22
 #define PIN_I2C_SDA 21
 #define SERVO_PWM 5
 
-#define LOCK_BUTTON             PIN_I2C_SCL //PIN_INPUT_1
+#define LOCK_BUTTON_TRUNK             PIN_INPUT_2
+#define LOCK_BUTTON_DASH              PIN_INPUT_3
 #define LOCK_BUTTON_REMOTE      PIN_I2C_SDA //PIN_INPUT_2
 #define DIGITAL_IN_LOCK_END_STOP    18
-#define MOTOR_RUNNING PIN_INPUT_3
+#define MOTOR_RUNNING PIN_I2C_SCL //UNUSED
 
 
 ///////////// Servo PID
@@ -89,7 +90,8 @@ MyServoPID servoPID (PIN_PWM_SERVO_MOTOR, PIN_DIR_SERVO_MOTOR,PIN_SERVO_POS_FB, 
 // For Switch to work as intended, object must be defined as LOW polarity
 // and event released() must be used to detect button pressed. Released goes to 1
 // as soon as the button is pressed
-Switch InputButton = Switch (LOCK_BUTTON, INPUT_PULLDOWN, LOW, 60, 100, 100, 30);
+Switch InputButton = Switch (LOCK_BUTTON_TRUNK, INPUT_PULLDOWN, LOW, 60, 100, 100, 30);
+Switch InputButtonDash = Switch (LOCK_BUTTON_DASH, INPUT_PULLDOWN, LOW, 60, 100, 100, 30);
 Switch InputRemoteButton = Switch (LOCK_BUTTON_REMOTE, INPUT_PULLDOWN, LOW, 60, 100, 100, 30);
 
 //////////////////  END PIN DEFINITION
@@ -163,6 +165,7 @@ void setup() {
   pinMode(PIN_INPUT_2, INPUT);
   pinMode(PIN_INPUT_3, INPUT);
   pinMode(DIGITAL_IN_LOCK_END_STOP, INPUT);
+  pinMode(PIN_FREE4, INPUT_PULLUP);
 
 
   pinMode(PIN_DIR_MOTOR_CAM, OUTPUT);
@@ -173,7 +176,8 @@ void setup() {
   pinMode(UNLOCK_MOTOR_CMD, OUTPUT);
   pinMode(POWER_DRIVES, OUTPUT);
 
-  pinMode (LOCK_BUTTON, INPUT_PULLDOWN);
+  pinMode (LOCK_BUTTON_TRUNK, INPUT_PULLDOWN);
+  pinMode (LOCK_BUTTON_DASH, INPUT_PULLDOWN);
   pinMode (LOCK_BUTTON_REMOTE, INPUT_PULLDOWN);
   pinMode (DIGITAL_IN_LOCK_END_STOP, INPUT_PULLDOWN);
 
@@ -197,6 +201,7 @@ void setup() {
   OutMotor (MOTOR_CAM, 0);
 
   InputButton.poll();
+  InputButtonDash.poll();
   InputRemoteButton.poll();
   inhibit_first = 1;
   servo_stopped = true;
@@ -220,6 +225,7 @@ void setup() {
 
 }
 
+
 void StopServo()
 {
     manual_servo = false;
@@ -238,7 +244,10 @@ void StopServo()
 
 
 void loop() {
-   
+
+ //  Serial << digitalRead(PIN_FREE4) << " \n";
+ //  delay (500);
+ //  return;
 
 //Serial << digitalRead (PIN_INPUT_1) << "  " << digitalRead (PIN_INPUT_2)<< digitalRead (PIN_INPUT_3) << "  " << digitalRead (PIN_INPUT_4) <<"\n";
  // delay(200);
@@ -253,6 +262,7 @@ void loop() {
   //return;
 
   InputButton.poll();
+  InputButtonDash.poll();
   InputRemoteButton.poll();
 
   //TestServo();
@@ -610,17 +620,16 @@ void ReadUserCommands()
   if (isCarMoving())
     return;
 
-  if (InputButton.released())
+  bool legitimate_button_press = false;  
+
+  if (InputButtonDash.released())
+    legitimate_button_press = true;
+
+  if (InputButton.released() || InputButtonDash.released() )
   {
     
     Serial << "   *******  BUTTON ******* \n";
-  /*  if (inhibit_first)
-    {
-      inhibit_first = 0;
-      return;
-    }
-*/
-    if (isCarLocked())
+    if (isCarLocked() && !legitimate_button_press)
       if (state == STATE_BOOT_LOCKED)
         mode = MODE_IDLE;
       else
@@ -690,10 +699,8 @@ void ReadUserCommands()
 
 boolean isCarLocked()
 {
-  //TODO read dedicated input signal and define
-  // if car is locked
 
-  return false;
+  return digitalRead(PIN_FREE4);
 }
 
 boolean isMotorRunning()
