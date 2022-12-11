@@ -12,7 +12,7 @@
 #define POSITION_TOLERANCE_HISTERESIS 30
 
 
-#define CURRENT_LIMIT 3.4
+#define CURRENT_LIMIT 4.4
 #define CURRENT_EXTRA_ALLOWANCE_LOCK 4.0//M3.2    // <===============================
 #define OVERCURRENT_CONSECUTIVE_STEPS 15
 
