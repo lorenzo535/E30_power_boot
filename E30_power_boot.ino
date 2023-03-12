@@ -6,12 +6,12 @@
 //////////////////MOST IMPORTANT SETTINGS////////////////////////////////////
 #define SERVO_POSITION_ENGAGEMENT 1900
 #define SERVO_POSITION_ENGAGEMENT_INCREASE_CURRENT SERVO_POSITION_ENGAGEMENT +120
-#define SERVO_POSITION_TOP_END 2450
-#define SERVO_POSITION_UNLOCK SERVO_POSITION_ENGAGEMENT_INCREASE_CURRENT + 50
+#define SERVO_POSITION_TOP_END 2455
+#define SERVO_POSITION_UNLOCK 2030
 #define POSITION_TOLERANCE 30
 #define POSITION_TOLERANCE_HISTERESIS 30
 
-
+#define CURRENT_LIMIT_OPENING 1.8
 #define CURRENT_LIMIT 4.4
 #define CURRENT_EXTRA_ALLOWANCE_LOCK 4.0//M3.2    // <===============================
 #define OVERCURRENT_CONSECUTIVE_STEPS 15
@@ -83,7 +83,7 @@ bool show_us_distance;
 ///////////// Servo PID
 #define PIN_SERVO_POS_FB 27
 #include "myservopid.h"
-MyServoPID servoPID (PIN_PWM_SERVO_MOTOR, PIN_DIR_SERVO_MOTOR,PIN_SERVO_POS_FB, 45, 10.2, 0.54);
+MyServoPID servoPID (PIN_PWM_SERVO_MOTOR, PIN_DIR_SERVO_MOTOR,PIN_SERVO_POS_FB, 55, 10.2, 0.54);
 
 
 
@@ -925,6 +925,10 @@ void CurrentProtection()
      // show_current_measure = true;
   }
 
+  if (mode == MODE_OPENING)
+    current_limit = CURRENT_LIMIT_OPENING;
+
+
   if (show_current_measure)
   {
     if (skip >= 30)
@@ -937,7 +941,7 @@ void CurrentProtection()
 
 
   unsigned long deltat;
-  if ((fabs(average) >= current_limit) && (state == STATE_SWINGING) && (mode != MODE_OPENING) )
+  if ((fabs(average) >= current_limit) && (state == STATE_SWINGING) )//&& (mode != MODE_OPENING) )
   {
     overcurrent_cnt++;
 
@@ -946,18 +950,17 @@ void CurrentProtection()
 
       deltat = millis() - motion_started;
       //Inhibit first 0.5 seconds after servo has started moving
-      if (deltat >= 500)
+      if (deltat >= 2000)
       {
         Serial << "##### current limit reached " << fabs(average) << " (A) ; current position is " << current_pos << "\n";
         StopServo();
         show_current_measure = false;
-        if (mode == MODE_CLOSING)
+        if ((mode == MODE_CLOSING)||(mode == MODE_OPENING))
           //      mode = MODE_SAFETY_CLOSING;
           //      else
           mode = MODE_IDLE;
-        overcurrent_cnt = 0;
-        //delay (500);
       }
+        overcurrent_cnt = 0;
     }
   }
   else
